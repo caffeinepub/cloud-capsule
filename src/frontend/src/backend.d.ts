@@ -1,0 +1,83 @@
+import type { Principal } from "@icp-sdk/core/principal";
+export interface Some<T> {
+    __kind__: "Some";
+    value: T;
+}
+export interface None {
+    __kind__: "None";
+}
+export type Option<T> = Some<T> | None;
+export interface NeuronEntry {
+    dissolveDate: string;
+    notes: string;
+    neuronId: string;
+    designatedController: string;
+    votingPreferences: string;
+}
+export interface Beneficiary {
+    id: string;
+    username: string;
+    displayName: string;
+    createdAt: Time;
+    hashedPassword: string;
+}
+export type Time = bigint;
+export interface Media {
+    id: string;
+    title: string;
+    createdAt: Time;
+    blobId: string;
+    mediaType: MediaType;
+}
+export interface UserProfile {
+    name: string;
+    email?: string;
+}
+export interface Note {
+    id: string;
+    title: string;
+    body: string;
+    createdAt: Time;
+    updatedAt: Time;
+}
+export enum MediaType {
+    video = "video",
+    photo = "photo"
+}
+export enum UserRole {
+    admin = "admin",
+    user = "user",
+    guest = "guest"
+}
+export interface backendInterface {
+    addBeneficiary(username: string, hashedPassword: string, displayName: string): Promise<void>;
+    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    beneficiaryLogin(capsuleOwner: Principal, username: string, password: string): Promise<string>;
+    beneficiaryLogout(token: string): Promise<void>;
+    createCapsule(): Promise<void>;
+    createMedia(title: string, blobId: string, mediaType: MediaType): Promise<string>;
+    createNeuronEntry(neuronId: string, dissolveDate: string, designatedController: string, votingPreferences: string, notes: string): Promise<string>;
+    createNote(title: string, body: string): Promise<string>;
+    deleteMedia(mediaId: string): Promise<void>;
+    deleteNeuronEntry(entryId: string): Promise<void>;
+    deleteNote(noteId: string): Promise<void>;
+    getBeneficiaries(): Promise<Array<Beneficiary>>;
+    getCallerUserProfile(): Promise<UserProfile | null>;
+    getCallerUserRole(): Promise<UserRole>;
+    getCanisterId(): Promise<Principal>;
+    getCapsuleMedia(capsuleOwner: Principal): Promise<Array<Media>>;
+    getCapsuleNotes(capsuleOwner: Principal): Promise<Array<Note>>;
+    getCycleBalance(): Promise<bigint>;
+    getGlobalInstructions(capsuleOwner: Principal): Promise<string>;
+    getNeuronEntries(capsuleOwner: Principal): Promise<Array<NeuronEntry>>;
+    getUserProfile(user: Principal): Promise<UserProfile | null>;
+    isCallerAdmin(): Promise<boolean>;
+    isLoggedInToBeneficiarySession(token: string): Promise<boolean>;
+    removeBeneficiary(username: string): Promise<void>;
+    saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setGlobalInstructions(instructions: string): Promise<void>;
+    toggleCapsuleLock(): Promise<void>;
+    updateNeuronEntry(entryId: string, neuronId: string, dissolveDate: string, designatedController: string, votingPreferences: string, notes: string): Promise<void>;
+    updateNote(noteId: string, title: string, body: string): Promise<void>;
+    validateBeneficiarySession(token: string): Promise<Principal | null>;
+}

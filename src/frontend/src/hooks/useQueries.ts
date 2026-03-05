@@ -1,0 +1,398 @@
+import type { Principal } from "@dfinity/principal";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  Beneficiary,
+  Media,
+  NeuronEntry,
+  Note,
+  UserProfile,
+} from "../backend.d";
+import { useActor } from "./useActor";
+
+// ── User Profile ──────────────────────────────────────────────────────────
+
+export function useGetCallerUserProfile() {
+  const { actor, isFetching: actorFetching } = useActor();
+
+  const query = useQuery<UserProfile | null>({
+    queryKey: ["currentUserProfile"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.getCallerUserProfile();
+    },
+    enabled: !!actor && !actorFetching,
+    retry: false,
+  });
+
+  return {
+    ...query,
+    isLoading: actorFetching || query.isLoading,
+    isFetched: !!actor && query.isFetched,
+  };
+}
+
+export function useSaveCallerUserProfile() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (profile: UserProfile) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.saveCallerUserProfile(profile);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["currentUserProfile"] });
+    },
+  });
+}
+
+// ── Capsule ───────────────────────────────────────────────────────────────
+
+export function useCreateCapsule() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.createCapsule();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["capsuleLockStatus"] });
+    },
+  });
+}
+
+export function useToggleCapsuleLock() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.toggleCapsuleLock();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["capsuleLockStatus"] });
+    },
+  });
+}
+
+// ── Cycle Balance & Canister ID ───────────────────────────────────────────
+
+export function useGetCycleBalance() {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<bigint>({
+    queryKey: ["cycleBalance"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.getCycleBalance();
+    },
+    enabled: !!actor && !isFetching,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useGetCanisterId() {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<Principal>({
+    queryKey: ["canisterId"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.getCanisterId();
+    },
+    enabled: !!actor && !isFetching,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+// ── Notes ─────────────────────────────────────────────────────────────────
+
+export function useGetCapsuleNotes(capsuleOwner: Principal | null) {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<Note[]>({
+    queryKey: ["capsuleNotes", capsuleOwner?.toString()],
+    queryFn: async () => {
+      if (!actor || !capsuleOwner)
+        throw new Error("Actor or owner not available");
+      return actor.getCapsuleNotes(capsuleOwner);
+    },
+    enabled: !!actor && !isFetching && !!capsuleOwner,
+  });
+}
+
+export function useCreateNote() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ title, body }: { title: string; body: string }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.createNote(title, body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["capsuleNotes"] });
+    },
+  });
+}
+
+export function useUpdateNote() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      noteId,
+      title,
+      body,
+    }: { noteId: string; title: string; body: string }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.updateNote(noteId, title, body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["capsuleNotes"] });
+    },
+  });
+}
+
+export function useDeleteNote() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (noteId: string) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.deleteNote(noteId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["capsuleNotes"] });
+    },
+  });
+}
+
+// ── Media ─────────────────────────────────────────────────────────────────
+
+export function useGetCapsuleMedia(capsuleOwner: Principal | null) {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<Media[]>({
+    queryKey: ["capsuleMedia", capsuleOwner?.toString()],
+    queryFn: async () => {
+      if (!actor || !capsuleOwner)
+        throw new Error("Actor or owner not available");
+      return actor.getCapsuleMedia(capsuleOwner);
+    },
+    enabled: !!actor && !isFetching && !!capsuleOwner,
+  });
+}
+
+export function useCreateMedia() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      title,
+      blobId,
+      mediaType,
+    }: {
+      title: string;
+      blobId: string;
+      mediaType: import("../backend.d").MediaType;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.createMedia(title, blobId, mediaType);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["capsuleMedia"] });
+    },
+  });
+}
+
+export function useDeleteMedia() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (mediaId: string) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.deleteMedia(mediaId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["capsuleMedia"] });
+    },
+  });
+}
+
+// ── Neuron Entries ────────────────────────────────────────────────────────
+
+// NeuronEntry with optional id (the backend returns entries with ids at runtime even if not typed)
+export type NeuronEntryWithId = NeuronEntry & { id?: string };
+
+export function useGetNeuronEntries(capsuleOwner: Principal | null) {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<NeuronEntryWithId[]>({
+    queryKey: ["neuronEntries", capsuleOwner?.toString()],
+    queryFn: async () => {
+      if (!actor || !capsuleOwner)
+        throw new Error("Actor or owner not available");
+      return actor.getNeuronEntries(capsuleOwner) as Promise<
+        NeuronEntryWithId[]
+      >;
+    },
+    enabled: !!actor && !isFetching && !!capsuleOwner,
+  });
+}
+
+export function useGetGlobalInstructions(capsuleOwner: Principal | null) {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<string>({
+    queryKey: ["globalInstructions", capsuleOwner?.toString()],
+    queryFn: async () => {
+      if (!actor || !capsuleOwner)
+        throw new Error("Actor or owner not available");
+      return actor.getGlobalInstructions(capsuleOwner);
+    },
+    enabled: !!actor && !isFetching && !!capsuleOwner,
+  });
+}
+
+export function useSetGlobalInstructions() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (instructions: string) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.setGlobalInstructions(instructions);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["globalInstructions"] });
+    },
+  });
+}
+
+export function useCreateNeuronEntry() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entry: {
+      neuronId: string;
+      dissolveDate: string;
+      designatedController: string;
+      votingPreferences: string;
+      notes: string;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.createNeuronEntry(
+        entry.neuronId,
+        entry.dissolveDate,
+        entry.designatedController,
+        entry.votingPreferences,
+        entry.notes,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["neuronEntries"] });
+    },
+  });
+}
+
+export function useUpdateNeuronEntry() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entry: {
+      entryId: string;
+      neuronId: string;
+      dissolveDate: string;
+      designatedController: string;
+      votingPreferences: string;
+      notes: string;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.updateNeuronEntry(
+        entry.entryId,
+        entry.neuronId,
+        entry.dissolveDate,
+        entry.designatedController,
+        entry.votingPreferences,
+        entry.notes,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["neuronEntries"] });
+    },
+  });
+}
+
+export function useDeleteNeuronEntry() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entryId: string) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.deleteNeuronEntry(entryId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["neuronEntries"] });
+    },
+  });
+}
+
+// ── Beneficiaries ─────────────────────────────────────────────────────────
+
+export function useGetBeneficiaries() {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<Beneficiary[]>({
+    queryKey: ["beneficiaries"],
+    queryFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.getBeneficiaries();
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useAddBeneficiary() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      username,
+      hashedPassword,
+      displayName,
+    }: { username: string; hashedPassword: string; displayName: string }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.addBeneficiary(username, hashedPassword, displayName);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["beneficiaries"] });
+    },
+  });
+}
+
+export function useRemoveBeneficiary() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (username: string) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.removeBeneficiary(username);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["beneficiaries"] });
+    },
+  });
+}

@@ -1,0 +1,543 @@
+import Text "mo:core/Text";
+import Iter "mo:core/Iter";
+import Time "mo:core/Time";
+import Map "mo:core/Map";
+import Array "mo:core/Array";
+import List "mo:core/List";
+import Principal "mo:core/Principal";
+import Runtime "mo:core/Runtime";
+import Order "mo:core/Order";
+import Timer "mo:core/Timer";
+
+import Storage "blob-storage/Storage";
+import MixinStorage "blob-storage/Mixin";
+import MixinAuthorization "authorization/MixinAuthorization";
+import AccessControl "authorization/access-control";
+
+actor {
+  // Initialize the access control system
+  let accessControlState = AccessControl.initState();
+  include MixinAuthorization(accessControlState);
+
+  include MixinStorage();
+
+  module Capsule {
+    public func compare(capsule1 : Capsule, capsule2 : Capsule) : Order.Order {
+      Text.compare(capsule1.owner.toText(), capsule2.owner.toText());
+    };
+  };
+
+  module Note {
+    public func compare(note1 : Note, note2 : Note) : Order.Order {
+      Text.compare(note1.title, note2.title);
+    };
+  };
+
+  module Media {
+    public func compare(media1 : Media, media2 : Media) : Order.Order {
+      Text.compare(media1.title, media2.title);
+    };
+  };
+
+  module Beneficiary {
+    public func compare(beneficiary1 : Beneficiary, beneficiary2 : Beneficiary) : Order.Order {
+      Text.compare(beneficiary1.username, beneficiary2.username);
+    };
+  };
+
+  public type UserProfile = {
+    name : Text;
+    email : ?Text;
+  };
+
+  type Media = {
+    id : Text;
+    title : Text;
+    blobId : Text;
+    mediaType : MediaType;
+    createdAt : Time.Time;
+  };
+
+  type MediaType = { #photo; #video };
+
+  type Note = {
+    id : Text;
+    title : Text;
+    body : Text;
+    createdAt : Time.Time;
+    updatedAt : Time.Time;
+  };
+
+  type Beneficiary = {
+    id : Text;
+    username : Text;
+    hashedPassword : Text;
+    displayName : Text;
+    createdAt : Time.Time;
+  };
+
+  type NeuronEntry = {
+    neuronId : Text;
+    dissolveDate : Text;
+    designatedController : Text;
+    votingPreferences : Text;
+    notes : Text;
+  };
+
+  type Capsule = {
+    owner : Principal;
+    locked : Bool;
+    notes : Map.Map<Text, Note>;
+    media : Map.Map<Text, Media>;
+    beneficiaries : Map.Map<Text, Beneficiary>;
+    neuronEntries : Map.Map<Text, NeuronEntry>;
+    globalInstructions : Text;
+  };
+
+  let capsules = Map.empty<Principal, Capsule>();
+  let beneficiarySessions = Map.empty<Text, (Principal, Text, Time.Time)>();
+  let userProfiles = Map.empty<Principal, UserProfile>();
+
+  // User Profile Management (required by instructions)
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view profiles");
+    };
+    userProfiles.get(caller);
+  };
+
+  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own profile");
+    };
+    userProfiles.get(user);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
+    userProfiles.add(caller, profile);
+  };
+
+  // Capsule Management
+  public shared ({ caller }) func createCapsule() : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can create capsules");
+    };
+
+    if (capsules.containsKey(caller)) {
+      Runtime.trap("Capsule already exists");
+    };
+
+    let newCapsule : Capsule = {
+      owner = caller;
+      locked = true;
+      notes = Map.empty<Text, Note>();
+      media = Map.empty<Text, Media>();
+      beneficiaries = Map.empty<Text, Beneficiary>();
+      neuronEntries = Map.empty<Text, NeuronEntry>();
+      globalInstructions = "";
+    };
+
+    capsules.add(caller, newCapsule);
+  };
+
+  public shared ({ caller }) func toggleCapsuleLock() : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can toggle capsule lock");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can toggle lock");
+    };
+
+    let updatedCapsule : Capsule = {
+      owner = capsule.owner;
+      locked = not capsule.locked;
+      notes = capsule.notes;
+      media = capsule.media;
+      beneficiaries = capsule.beneficiaries;
+      neuronEntries = capsule.neuronEntries;
+      globalInstructions = capsule.globalInstructions;
+    };
+    capsules.add(caller, updatedCapsule);
+  };
+
+  // Note Management
+  public shared ({ caller }) func createNote(title : Text, body : Text) : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can create notes");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can create notes");
+    };
+
+    let noteId = Time.now().toText();
+    let newNote : Note = {
+      id = noteId;
+      title;
+      body;
+      createdAt = Time.now();
+      updatedAt = Time.now();
+    };
+
+    capsule.notes.add(noteId, newNote);
+
+    noteId;
+  };
+
+  public shared ({ caller }) func updateNote(noteId : Text, title : Text, body : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can update notes");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can update notes");
+    };
+
+    switch (capsule.notes.get(noteId)) {
+      case (null) { Runtime.trap("Note not found") };
+      case (?existingNote) {
+        let updatedNote : Note = {
+          id = existingNote.id;
+          title;
+          body;
+          createdAt = existingNote.createdAt;
+          updatedAt = Time.now();
+        };
+        capsule.notes.add(noteId, updatedNote);
+      };
+    };
+  };
+
+  public shared ({ caller }) func deleteNote(noteId : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can delete notes");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can delete notes");
+    };
+
+    capsule.notes.remove(noteId);
+  };
+
+  public query ({ caller }) func getCapsuleNotes(capsuleOwner : Principal) : async [Note] {
+    let capsule = getCapsuleByOwner(capsuleOwner);
+    verifyReadAccess(caller, capsule);
+
+    capsule.notes.values().toArray().sort();
+  };
+
+  // Media Management
+  public shared ({ caller }) func createMedia(title : Text, blobId : Text, mediaType : MediaType) : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can create media");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can create media");
+    };
+
+    let mediaId = Time.now().toText();
+    let newMedia : Media = {
+      id = mediaId;
+      title;
+      blobId;
+      mediaType;
+      createdAt = Time.now();
+    };
+
+    capsule.media.add(mediaId, newMedia);
+
+    mediaId;
+  };
+
+  public shared ({ caller }) func deleteMedia(mediaId : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can delete media");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can delete media");
+    };
+
+    capsule.media.remove(mediaId);
+  };
+
+  public query ({ caller }) func getCapsuleMedia(capsuleOwner : Principal) : async [Media] {
+    let capsule = getCapsuleByOwner(capsuleOwner);
+    verifyReadAccess(caller, capsule);
+
+    capsule.media.values().toArray().sort();
+  };
+
+  // Neuron Entry Management
+  public shared ({ caller }) func createNeuronEntry(
+    neuronId : Text,
+    dissolveDate : Text,
+    designatedController : Text,
+    votingPreferences : Text,
+    notes : Text,
+  ) : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can create neuron entries");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can create neuron entries");
+    };
+
+    let entryId = Time.now().toText();
+    let newEntry : NeuronEntry = {
+      neuronId;
+      dissolveDate;
+      designatedController;
+      votingPreferences;
+      notes;
+    };
+
+    capsule.neuronEntries.add(entryId, newEntry);
+
+    entryId;
+  };
+
+  public shared ({ caller }) func updateNeuronEntry(
+    entryId : Text,
+    neuronId : Text,
+    dissolveDate : Text,
+    designatedController : Text,
+    votingPreferences : Text,
+    notes : Text,
+  ) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can update neuron entries");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can update neuron entries");
+    };
+
+    let updatedEntry : NeuronEntry = {
+      neuronId;
+      dissolveDate;
+      designatedController;
+      votingPreferences;
+      notes;
+    };
+
+    capsule.neuronEntries.add(entryId, updatedEntry);
+  };
+
+  public shared ({ caller }) func deleteNeuronEntry(entryId : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can delete neuron entries");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can delete neuron entries");
+    };
+
+    capsule.neuronEntries.remove(entryId);
+  };
+
+  public query ({ caller }) func getNeuronEntries(capsuleOwner : Principal) : async [NeuronEntry] {
+    let capsule = getCapsuleByOwner(capsuleOwner);
+    verifyReadAccess(caller, capsule);
+
+    capsule.neuronEntries.values().toArray();
+  };
+
+  public shared ({ caller }) func setGlobalInstructions(instructions : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can set global instructions");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can set global instructions");
+    };
+
+    let updatedCapsule : Capsule = {
+      owner = capsule.owner;
+      locked = capsule.locked;
+      notes = capsule.notes;
+      media = capsule.media;
+      beneficiaries = capsule.beneficiaries;
+      neuronEntries = capsule.neuronEntries;
+      globalInstructions = instructions;
+    };
+    capsules.add(caller, updatedCapsule);
+  };
+
+  public query ({ caller }) func getGlobalInstructions(capsuleOwner : Principal) : async Text {
+    let capsule = getCapsuleByOwner(capsuleOwner);
+    verifyReadAccess(caller, capsule);
+
+    capsule.globalInstructions;
+  };
+
+  // Beneficiary Management
+  public shared ({ caller }) func addBeneficiary(username : Text, hashedPassword : Text, displayName : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can add beneficiaries");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can add beneficiaries");
+    };
+
+    if (capsule.beneficiaries.containsKey(username)) {
+      Runtime.trap("Beneficiary already exists");
+    };
+
+    let newBeneficiary : Beneficiary = {
+      id = Time.now().toText();
+      username;
+      hashedPassword;
+      displayName;
+      createdAt = Time.now();
+    };
+
+    capsule.beneficiaries.add(username, newBeneficiary);
+  };
+
+  public shared ({ caller }) func removeBeneficiary(username : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can remove beneficiaries");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can remove beneficiaries");
+    };
+
+    capsule.beneficiaries.remove(username);
+  };
+
+  public query ({ caller }) func getBeneficiaries() : async [Beneficiary] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can view beneficiaries");
+    };
+
+    let capsule = getCapsuleByOwner(caller);
+
+    if (capsule.owner != caller) {
+      Runtime.trap("Unauthorized: Only capsule owner can view beneficiaries");
+    };
+
+    capsule.beneficiaries.values().toArray().sort();
+  };
+
+  // Beneficiary Session Management
+  public shared func beneficiaryLogin(capsuleOwner : Principal, username : Text, password : Text) : async Text {
+    let capsule = getCapsuleByOwner(capsuleOwner);
+
+    switch (capsule.beneficiaries.get(username)) {
+      case (null) { Runtime.trap("Invalid credentials") };
+      case (?beneficiary) {
+        if (beneficiary.hashedPassword != password) {
+          Runtime.trap("Invalid credentials");
+        };
+
+        let token = Time.now().toText();
+        let expiresAt = Time.now() + 24 * 60 * 60 * 1_000_000_000; // 24 hours in nanoseconds
+        beneficiarySessions.add(token, (capsuleOwner, username, expiresAt));
+
+        token;
+      };
+    };
+  };
+
+  public query func validateBeneficiarySession(token : Text) : async ?Principal {
+    let currentTime = Time.now();
+    switch (beneficiarySessions.get(token)) {
+      case (null) { null };
+      case (?(owner, username, expiresAt)) {
+        if (currentTime > expiresAt) {
+          null;
+        } else {
+          ?owner;
+        };
+      };
+    };
+  };
+
+  public query func isLoggedInToBeneficiarySession(token : Text) : async Bool {
+    let currentTime = Time.now();
+    switch (beneficiarySessions.get(token)) {
+      case (null) { false };
+      case (?(owner, username, expiresAt)) {
+        currentTime <= expiresAt;
+      };
+    };
+  };
+
+  public shared func beneficiaryLogout(token : Text) : async () {
+    beneficiarySessions.remove(token);
+  };
+
+  // Cycle Balance Queries (admin or owner only)
+  public query ({ caller }) func getCycleBalance() : async Nat {
+    Runtime.trap("NotImplemented: cyclesBalance");
+  };
+
+  public query ({ caller }) func getCanisterId() : async Principal {
+    Runtime.trap("NotImplemented: getCanisterId");
+  };
+
+  // Helper Functions
+  func getCapsuleByOwner(owner : Principal) : Capsule {
+    switch (capsules.get(owner)) {
+      case (null) { Runtime.trap("Capsule not found") };
+      case (?capsule) { capsule };
+    };
+  };
+
+  func verifyReadAccess(caller : Principal, capsule : Capsule) {
+    // Owner always has access
+    if (caller == capsule.owner) {
+      return;
+    };
+
+    // Check if caller is authenticated user with permission
+    if (AccessControl.hasPermission(accessControlState, caller, #user)) {
+      // Authenticated user but not owner - check if capsule is unlocked
+      if (capsule.locked) {
+        Runtime.trap("Unauthorized: Capsule is locked");
+      };
+      return;
+    };
+
+    // For beneficiary sessions, they would need to pass their token
+    // and we'd validate it separately in the frontend
+    // Since query calls don't have session context, beneficiaries
+    // must use their session token through a different mechanism
+
+    Runtime.trap("Unauthorized: Access denied");
+  };
+};
