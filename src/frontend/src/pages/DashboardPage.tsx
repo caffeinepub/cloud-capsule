@@ -101,7 +101,7 @@ export default function DashboardPage() {
           {/* Logo + title */}
           <div className="flex items-center gap-3">
             <img
-              src="/assets/generated/cloud-capsule-logo-transparent.png"
+              src="/assets/uploads/4FFBD3E5-2A6D-4DA4-B19E-16EFB7B05C9D-1.png"
               alt="Cloud Capsule"
               className="w-8 h-8 object-contain"
             />

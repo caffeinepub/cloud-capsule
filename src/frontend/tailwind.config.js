@@ -20,6 +20,7 @@ export default {
         serif: ["Instrument Serif", "serif"],
         body: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
         sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
+        logo: ["Sora", "system-ui", "sans-serif"],
       },
       colors: {
         border: "oklch(var(--border))",

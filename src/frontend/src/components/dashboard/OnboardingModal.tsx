@@ -31,7 +31,7 @@ export default function OnboardingModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{
-        background: "oklch(0.14 0.025 50 / 0.6)",
+        background: "oklch(0.08 0.03 265 / 0.75)",
         backdropFilter: "blur(8px)",
       }}
     >
@@ -46,20 +46,20 @@ export default function OnboardingModal({
           damping: 20,
         }}
       >
-        <div
-          className="capsule-card p-8 space-y-6"
-          style={{ background: "oklch(0.99 0.006 80)" }}
-        >
+        <div className="capsule-card p-8 space-y-6">
           {/* Icon */}
           <div className="flex flex-col items-center text-center space-y-4">
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-warm"
-              style={{ background: "oklch(0.52 0.12 62)" }}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-cloud"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.67 0.18 230), oklch(0.58 0.22 285))",
+              }}
             >
               <Cloud className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h2 className="font-display text-2xl font-semibold text-foreground">
+              <h2 className="font-display text-2xl font-semibold text-gradient-sky">
                 Create Your Capsule
               </h2>
               <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
@@ -71,7 +71,10 @@ export default function OnboardingModal({
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium">
+              <Label
+                htmlFor="name"
+                className="text-sm font-medium text-foreground"
+              >
                 Your Name
               </Label>
               <Input
@@ -89,13 +92,13 @@ export default function OnboardingModal({
             <div
               className="rounded-lg p-4 text-sm space-y-1.5"
               style={{
-                background: "oklch(0.52 0.12 62 / 0.06)",
-                border: "1px solid oklch(0.52 0.12 62 / 0.2)",
+                background: "oklch(0.67 0.18 230 / 0.08)",
+                border: "1px solid oklch(0.67 0.18 230 / 0.25)",
               }}
             >
               <p
                 className="font-medium"
-                style={{ color: "oklch(0.42 0.1 60)" }}
+                style={{ color: "oklch(0.72 0.18 225)" }}
               >
                 What happens next:
               </p>
@@ -108,11 +111,11 @@ export default function OnboardingModal({
 
             <Button
               type="submit"
-              className="w-full h-11 gap-2"
+              className="w-full h-11 gap-2 text-white font-semibold glow-sky"
               disabled={isLoading || !name.trim()}
               style={{
-                background: "oklch(0.52 0.12 62)",
-                color: "oklch(0.99 0.006 80)",
+                background:
+                  "linear-gradient(135deg, oklch(0.67 0.18 230), oklch(0.58 0.22 285))",
               }}
             >
               {isLoading ? (

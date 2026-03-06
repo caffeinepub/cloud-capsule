@@ -50,7 +50,7 @@ export default function LandingPage() {
     {
       icon: Brain,
       title: "ICP Neuron Instructions",
-      desc: "Leave detailed guidance on your neurons, dissolve dates, and voting preferences.",
+      desc: "Leave guidance on your neurons, including details about maturity, voting, and governance participation.",
       hue: 260,
     },
     {
@@ -130,7 +130,7 @@ export default function LandingPage() {
         {/* Logo */}
         <div className="flex items-center gap-3">
           <img
-            src="/assets/generated/cloud-capsule-logo-transparent.png"
+            src="/assets/uploads/4FFBD3E5-2A6D-4DA4-B19E-16EFB7B05C9D-1.png"
             alt="Cloud Capsule"
             className="w-10 h-10 object-contain"
           />
@@ -187,7 +187,7 @@ export default function LandingPage() {
           >
             {/* Logo mark — large hero version */}
             <motion.div
-              className="flex justify-center"
+              className="flex flex-col items-center gap-4"
               initial={{ opacity: 0, scale: 0.85 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.05 }}
@@ -203,10 +203,35 @@ export default function LandingPage() {
                   }}
                 />
                 <img
-                  src="/assets/generated/cloud-capsule-logo-transparent.png"
+                  src="/assets/uploads/4FFBD3E5-2A6D-4DA4-B19E-16EFB7B05C9D-1.png"
                   alt="Cloud Capsule"
                   className="relative w-36 h-36 md:w-44 md:h-44 object-contain drop-shadow-2xl"
                 />
+              </div>
+
+              {/* Logo text beneath the hero image */}
+              <div className="relative flex items-center justify-center">
+                {/* Radial glow backdrop behind text */}
+                <div
+                  className="absolute inset-0 blur-2xl rounded-full pointer-events-none"
+                  style={{
+                    background:
+                      "radial-gradient(ellipse 120% 80%, oklch(0.67 0.18 230 / 0.25) 0%, oklch(0.58 0.22 285 / 0.18) 50%, transparent 100%)",
+                    transform: "scaleX(1.6) scaleY(1.8)",
+                  }}
+                />
+                <motion.span
+                  className="relative font-logo font-bold tracking-widest uppercase text-gradient-sky logo-text-glow"
+                  style={{
+                    fontSize: "clamp(1.6rem, 4vw, 2.8rem)",
+                    letterSpacing: "0.18em",
+                  }}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.45 }}
+                >
+                  Cloud Capsule
+                </motion.span>
               </div>
             </motion.div>
 
@@ -354,7 +379,7 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <img
-              src="/assets/generated/cloud-capsule-logo-transparent.png"
+              src="/assets/uploads/4FFBD3E5-2A6D-4DA4-B19E-16EFB7B05C9D-1.png"
               alt="Cloud Capsule"
               className="w-5 h-5 object-contain opacity-80"
             />
