@@ -21,7 +21,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import type { Principal } from "@dfinity/principal";
 import {
   Download,
@@ -46,7 +45,76 @@ import {
   useGetCapsuleMedia,
 } from "../../hooks/useQueries";
 import { formatTime } from "../../utils/crypto";
-import { fetchWithCorrectMime } from "../../utils/mimeDetect";
+
+/**
+ * Captures the first frame of a video file as a JPEG data URL.
+ * Returns an empty string if anything fails (caller falls back to <video> element).
+ */
+async function captureVideoFirstFrame(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    let objectUrl = "";
+    try {
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      objectUrl = URL.createObjectURL(file);
+      video.src = objectUrl;
+
+      const cleanup = () => {
+        try {
+          video.src = "";
+          video.load();
+        } catch {
+          // ignore
+        }
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
+
+      const onSeeked = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth || 320;
+          canvas.height = video.videoHeight || 240;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            cleanup();
+            resolve("");
+            return;
+          }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          cleanup();
+          resolve(dataUrl);
+        } catch {
+          cleanup();
+          resolve("");
+        }
+      };
+
+      const onLoadedData = () => {
+        // Seek to first frame; 'seeked' event fires when it's ready
+        video.currentTime = 0.001;
+      };
+
+      video.addEventListener("loadeddata", onLoadedData, { once: true });
+      video.addEventListener("seeked", onSeeked, { once: true });
+      video.addEventListener(
+        "error",
+        () => {
+          cleanup();
+          resolve("");
+        },
+        { once: true },
+      );
+
+      video.load();
+    } catch {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      resolve("");
+    }
+  });
+}
 
 interface MediaTabProps {
   ownerPrincipal: Principal;
@@ -56,56 +124,66 @@ function MediaCard({
   media,
   idx,
   onDelete,
-}: { media: Media; idx: number; onDelete: () => void }) {
-  const { getBlobUrl } = useBlobUpload();
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  thumbnailDataUrl,
+}: {
+  media: Media;
+  idx: number;
+  onDelete: () => void;
+  thumbnailDataUrl?: string;
+}) {
+  const { getBlobObjectUrl } = useBlobUpload();
+  // objectUrl is a typed blob URL (correct MIME) safe for <img>/<video> AND download
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [ext, setExt] = useState<string>("");
   const [urlLoading, setUrlLoading] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  // Load blob URL correctly via getBlobUrl (async, returns CDN URL)
+  // Fetch bytes once, detect MIME, create a typed object URL for both preview and download
   useEffect(() => {
     if (!media.blobId) {
       setUrlLoading(false);
       return;
     }
     let cancelled = false;
+    let createdUrl = "";
     setUrlLoading(true);
-    getBlobUrl(media.blobId)
-      .then((url) => {
+    const isVideo = media.mediaType === MediaType.video;
+    getBlobObjectUrl(media.blobId, isVideo)
+      .then(({ objectUrl: url, ext: detectedExt }) => {
         if (!cancelled) {
-          setBlobUrl(url || null);
+          createdUrl = url;
+          setObjectUrl(url);
+          setExt(detectedExt);
           setUrlLoading(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setBlobUrl(null);
+          setObjectUrl(null);
           setUrlLoading(false);
         }
       });
     return () => {
       cancelled = true;
+      // Revoke the object URL when the component unmounts or blobId changes
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [media.blobId, getBlobUrl]);
+  }, [media.blobId, media.mediaType, getBlobObjectUrl]);
 
   const handleDownload = useCallback(async () => {
-    if (!blobUrl) return;
+    if (!objectUrl) return;
     try {
-      const isVideo = media.mediaType === MediaType.video;
-      const { blob, ext } = await fetchWithCorrectMime(blobUrl, isVideo);
-      const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
-      const objectUrl = URL.createObjectURL(blob);
+      const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext || (media.mediaType === MediaType.video ? ".mp4" : ".jpg")}`;
       const link = document.createElement("a");
       link.href = objectUrl;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(objectUrl);
     } catch {
       toast.error("Download failed. Please try again.");
     }
-  }, [blobUrl, media.title, media.mediaType]);
+  }, [objectUrl, ext, media.title, media.mediaType]);
 
   return (
     <>
@@ -123,19 +201,19 @@ function MediaCard({
           className="relative bg-muted w-full overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 group"
           style={{ aspectRatio: "16/10" }}
           onClick={() => setLightboxOpen(true)}
-          disabled={urlLoading || !blobUrl}
+          disabled={urlLoading || !objectUrl}
           aria-label={`View ${media.title}`}
           data-ocid={`media.open_modal_button.${idx + 1}`}
         >
           {urlLoading && <Skeleton className="absolute inset-0 rounded-none" />}
 
-          {!urlLoading && blobUrl && media.mediaType === MediaType.photo && (
+          {!urlLoading && objectUrl && media.mediaType === MediaType.photo && (
             <>
               <img
-                src={blobUrl}
+                src={objectUrl}
                 alt={media.title}
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                onError={() => setBlobUrl(null)}
+                onError={() => setObjectUrl(null)}
               />
               {/* Hover overlay */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-center justify-center">
@@ -146,16 +224,27 @@ function MediaCard({
             </>
           )}
 
-          {!urlLoading && blobUrl && media.mediaType === MediaType.video && (
+          {!urlLoading && objectUrl && media.mediaType === MediaType.video && (
             <>
-              {/* Video poster / thumbnail area */}
-              {/* biome-ignore lint/a11y/useMediaCaption: video captions not required for personal memory uploads */}
-              <video
-                src={blobUrl}
-                className="w-full h-full object-cover"
-                preload="metadata"
-                muted
-              />
+              {/* Video thumbnail: use captured first-frame image if available, else <video> fallback */}
+              {thumbnailDataUrl ? (
+                <img
+                  src={thumbnailDataUrl}
+                  alt={media.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                // biome-ignore lint/a11y/useMediaCaption: video captions not required for personal memory uploads
+                <video
+                  src={objectUrl}
+                  className="w-full h-full object-cover"
+                  preload="metadata"
+                  muted
+                  onLoadedData={(e) => {
+                    e.currentTarget.currentTime = 0.001;
+                  }}
+                />
+              )}
               {/* Play overlay */}
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors duration-200">
                 <div className="bg-white/25 backdrop-blur-sm rounded-full p-3 group-hover:scale-110 transition-transform duration-200">
@@ -165,7 +254,7 @@ function MediaCard({
             </>
           )}
 
-          {!urlLoading && !blobUrl && (
+          {!urlLoading && !objectUrl && (
             <div className="absolute inset-0 flex items-center justify-center">
               {media.mediaType === MediaType.video ? (
                 <Video className="w-8 h-8 text-muted-foreground/40" />
@@ -212,7 +301,7 @@ function MediaCard({
 
           <div className="flex items-center gap-1 flex-shrink-0">
             {/* Download button */}
-            {blobUrl && (
+            {objectUrl && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -299,17 +388,17 @@ function MediaCard({
               maxHeight: "70vh",
             }}
           >
-            {blobUrl && media.mediaType === MediaType.photo && (
+            {objectUrl && media.mediaType === MediaType.photo && (
               <img
-                src={blobUrl}
+                src={objectUrl}
                 alt={media.title}
                 className="max-w-full max-h-[70vh] object-contain"
               />
             )}
-            {blobUrl && media.mediaType === MediaType.video && (
+            {objectUrl && media.mediaType === MediaType.video && (
               // biome-ignore lint/a11y/useMediaCaption: video captions not required for personal memory uploads
               <video
-                src={blobUrl}
+                src={objectUrl}
                 controls
                 autoPlay
                 className="max-w-full max-h-[70vh] object-contain"
@@ -328,7 +417,7 @@ function MediaCard({
               size="sm"
               className="gap-2"
               onClick={handleDownload}
-              disabled={!blobUrl}
+              disabled={!objectUrl}
               data-ocid="media.download_button"
             >
               <Download className="w-4 h-4" />
@@ -351,8 +440,12 @@ export default function MediaTab({ ownerPrincipal }: MediaTabProps) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
-  const [compress, setCompress] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // blobId -> first-frame JPEG data URL (ephemeral, cleared on page refresh)
+  const [videoThumbnails, setVideoThumbnails] = useState<
+    Record<string, string>
+  >({});
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -368,14 +461,29 @@ export default function MediaTab({ ownerPrincipal }: MediaTabProps) {
 
     try {
       const isVideo = selectedFile.type.startsWith("video/");
-      const blobId = await uploadFile(selectedFile, {
-        compress: compress && isVideo,
-      });
+
+      // Capture first frame before uploading (non-blocking if it fails)
+      const thumbnailPromise = isVideo
+        ? captureVideoFirstFrame(selectedFile)
+        : Promise.resolve("");
+
+      const blobId = await uploadFile(selectedFile);
+
       await createMedia.mutateAsync({
         title: title.trim(),
         blobId,
         mediaType: isVideo ? MediaType.video : MediaType.photo,
       });
+
+      // Store thumbnail keyed by blobId (resolves after upload so blobId is known)
+      if (isVideo) {
+        thumbnailPromise.then((dataUrl) => {
+          if (dataUrl) {
+            setVideoThumbnails((prev) => ({ ...prev, [blobId]: dataUrl }));
+          }
+        });
+      }
+
       toast.success("Media uploaded to your capsule");
       setUploadOpen(false);
       setSelectedFile(null);
@@ -471,6 +579,7 @@ export default function MediaTab({ ownerPrincipal }: MediaTabProps) {
               media={media}
               idx={idx}
               onDelete={() => handleDelete(media.id)}
+              thumbnailDataUrl={videoThumbnails[media.blobId] ?? ""}
             />
           ))}
         </motion.div>
@@ -559,26 +668,6 @@ export default function MediaTab({ ownerPrincipal }: MediaTabProps) {
                 data-ocid="media.input"
               />
             </div>
-
-            {/* Compress toggle (for videos) */}
-            {selectedFile?.type.startsWith("video/") && (
-              <div
-                className="flex items-center justify-between p-3 rounded-lg"
-                style={{ background: "oklch(0.67 0.18 230 / 0.07)" }}
-              >
-                <div>
-                  <p className="text-sm font-medium">Optimize for upload</p>
-                  <p className="text-xs text-muted-foreground">
-                    Reduces file size — recommended for large videos
-                  </p>
-                </div>
-                <Switch
-                  checked={compress}
-                  onCheckedChange={setCompress}
-                  data-ocid="media.switch"
-                />
-              </div>
-            )}
 
             {/* Upload progress */}
             {isUploading && (

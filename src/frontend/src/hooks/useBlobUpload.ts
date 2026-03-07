@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { ExternalBlob } from "../backend";
+import { detectMimeType, mimeToExt } from "../utils/mimeDetect";
 import { useActor } from "./useActor";
 
 export interface UploadState {
@@ -170,7 +171,8 @@ export function useBlobUpload() {
   );
 
   /**
-   * Get the direct URL for a stored blob by its blobId.
+   * Get the direct CDN URL for a stored blob by its blobId.
+   * NOTE: the CDN URL has no MIME type — use getBlobObjectUrl for media playback.
    */
   const getBlobUrl = useCallback(
     async (blobId: string): Promise<string> => {
@@ -186,9 +188,51 @@ export function useBlobUpload() {
     [actor],
   );
 
+  /**
+   * Fetch a blob by blobId, detect its real MIME type from magic bytes,
+   * and return a typed object URL safe for <img> / <video> src AND download.
+   *
+   * Returns { objectUrl, mimeType, ext }.
+   * The caller is responsible for revoking objectUrl when done.
+   */
+  const getBlobObjectUrl = useCallback(
+    async (
+      blobId: string,
+      isVideo: boolean,
+    ): Promise<{ objectUrl: string; mimeType: string; ext: string }> => {
+      const cdnUrl = await getBlobUrl(blobId);
+      if (!cdnUrl) throw new Error("Could not resolve blob URL");
+
+      const response = await fetch(cdnUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const arrayBuffer = await response.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+
+      // Detect real format from magic bytes
+      const fallback = isVideo ? "video/mp4" : "image/jpeg";
+      const mimeType = detectMimeType(uint8, fallback);
+      const ext = mimeToExt(mimeType) || (isVideo ? ".mp4" : ".jpg");
+
+      // For .mov files from iPhones, the browser can't play video/quicktime natively.
+      // Re-wrap as video/mp4 if the container is actually MP4-compatible (most iPhone
+      // MOV files use H.264 in a QuickTime wrapper that Chromium/Safari can play when
+      // served as video/mp4).
+      let playbackMime = mimeType;
+      if (mimeType === "video/quicktime") {
+        playbackMime = "video/mp4";
+      }
+
+      const blob = new Blob([uint8], { type: playbackMime });
+      const objectUrl = URL.createObjectURL(blob);
+      return { objectUrl, mimeType, ext };
+    },
+    [getBlobUrl],
+  );
+
   const reset = useCallback(() => {
     setState({ isUploading: false, progress: 0, error: null });
   }, []);
 
-  return { ...state, uploadFile, getBlobUrl, reset };
+  return { ...state, uploadFile, getBlobUrl, getBlobObjectUrl, reset };
 }

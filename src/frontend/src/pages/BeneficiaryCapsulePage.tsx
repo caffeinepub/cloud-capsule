@@ -32,7 +32,6 @@ import {
   useGetNeuronEntries,
 } from "../hooks/useQueries";
 import { formatTime } from "../utils/crypto";
-import { fetchWithCorrectMime } from "../utils/mimeDetect";
 
 function MemorialHeader({
   ownerName,
@@ -176,25 +175,23 @@ function MediaLightbox({
         <X className="w-5 h-5" />
       </button>
 
-      {/* Download button (lightbox) */}
+      {/* Download button (lightbox) — url is already a typed object URL */}
       <button
         type="button"
         className="absolute top-4 right-16 z-10 w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
         aria-label="Download"
-        onClick={async (e) => {
+        onClick={(e) => {
           e.stopPropagation();
           try {
-            const isVideo = media.mediaType === MediaType.video;
-            const { blob, ext } = await fetchWithCorrectMime(url, isVideo);
+            // Derive a sensible filename from the title; the object URL already has the right MIME
+            const ext = media.mediaType === MediaType.video ? ".mp4" : ".jpg";
             const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
-            const objectUrl = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.href = objectUrl;
+            link.href = url;
             link.download = filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(objectUrl);
           } catch {
             // silent — download errors are non-critical in lightbox
           }
@@ -241,56 +238,116 @@ function MediaLightbox({
   );
 }
 
+/**
+ * Captures the first frame of a video from an object URL as a JPEG data URL.
+ * Returns an empty string on failure (falls back to <video> element).
+ */
+async function captureVideoFirstFrameFromUrl(
+  objectUrl: string,
+): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      video.src = objectUrl;
+
+      const onSeeked = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = video.videoWidth || 320;
+          canvas.height = video.videoHeight || 240;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve("");
+            return;
+          }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        } catch {
+          resolve("");
+        }
+      };
+
+      const onLoadedData = () => {
+        video.currentTime = 0.001;
+      };
+
+      video.addEventListener("loadeddata", onLoadedData, { once: true });
+      video.addEventListener("seeked", onSeeked, { once: true });
+      video.addEventListener("error", () => resolve(""), { once: true });
+
+      video.load();
+    } catch {
+      resolve("");
+    }
+  });
+}
+
 function MediaItem({ media, idx }: { media: Media; idx: number }) {
-  const { getBlobUrl } = useBlobUpload();
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const { getBlobObjectUrl } = useBlobUpload();
+  // objectUrl is a typed blob URL (correct MIME) safe for <img>/<video> AND download
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [ext, setExt] = useState<string>("");
   const [urlLoading, setUrlLoading] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  // First-frame thumbnail captured from video blob after it loads
+  const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string>("");
 
-  // Resolve the blob URL asynchronously via the actor (same approach as MediaTab)
+  // Fetch bytes once, detect MIME, create a typed object URL for both preview and download
   useEffect(() => {
     if (!media.blobId) {
       setUrlLoading(false);
       return;
     }
     let cancelled = false;
+    let createdUrl = "";
     setUrlLoading(true);
-    getBlobUrl(media.blobId)
-      .then((url) => {
+    const isVideo = media.mediaType === MediaType.video;
+    getBlobObjectUrl(media.blobId, isVideo)
+      .then(({ objectUrl: url, ext: detectedExt }) => {
         if (!cancelled) {
-          setBlobUrl(url || null);
+          createdUrl = url;
+          setObjectUrl(url);
+          setExt(detectedExt);
           setUrlLoading(false);
+          // For videos, capture first frame as thumbnail
+          if (isVideo) {
+            captureVideoFirstFrameFromUrl(url).then((dataUrl) => {
+              if (!cancelled && dataUrl) {
+                setThumbnailDataUrl(dataUrl);
+              }
+            });
+          }
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setBlobUrl(null);
+          setObjectUrl(null);
           setUrlLoading(false);
         }
       });
     return () => {
       cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [media.blobId, getBlobUrl]);
+  }, [media.blobId, media.mediaType, getBlobObjectUrl]);
 
   const handleDownload = useCallback(async () => {
-    if (!blobUrl) return;
+    if (!objectUrl) return;
     try {
-      const isVideo = media.mediaType === MediaType.video;
-      const { blob, ext } = await fetchWithCorrectMime(blobUrl, isVideo);
-      const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
-      const objectUrl = URL.createObjectURL(blob);
+      const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext || (media.mediaType === MediaType.video ? ".mp4" : ".jpg")}`;
       const link = document.createElement("a");
       link.href = objectUrl;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(objectUrl);
     } catch {
       toast.error("Download failed. Please try again.");
     }
-  }, [blobUrl, media.title, media.mediaType]);
+  }, [objectUrl, ext, media.title, media.mediaType]);
 
   return (
     <>
@@ -307,21 +364,21 @@ function MediaItem({ media, idx }: { media: Media; idx: number }) {
           type="button"
           className="relative w-full bg-muted overflow-hidden cursor-pointer block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
           style={{ aspectRatio: "16/9" }}
-          onClick={() => blobUrl && setLightboxOpen(true)}
-          disabled={urlLoading || !blobUrl}
+          onClick={() => objectUrl && setLightboxOpen(true)}
+          disabled={urlLoading || !objectUrl}
           aria-label={`View ${media.title} full size`}
           data-ocid={`capsule.media.open_modal_button.${idx + 1}`}
         >
           {urlLoading && <Skeleton className="absolute inset-0 rounded-none" />}
 
-          {!urlLoading && blobUrl && media.mediaType === MediaType.photo && (
+          {!urlLoading && objectUrl && media.mediaType === MediaType.photo && (
             <>
               <img
-                src={blobUrl}
+                src={objectUrl}
                 alt={media.title}
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 loading="lazy"
-                onError={() => setBlobUrl(null)}
+                onError={() => setObjectUrl(null)}
               />
               {/* Hover overlay */}
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-center justify-center">
@@ -332,15 +389,27 @@ function MediaItem({ media, idx }: { media: Media; idx: number }) {
             </>
           )}
 
-          {!urlLoading && blobUrl && media.mediaType === MediaType.video && (
+          {!urlLoading && objectUrl && media.mediaType === MediaType.video && (
             <>
-              {/* biome-ignore lint/a11y/useMediaCaption: personal memory video, captions not applicable */}
-              <video
-                src={blobUrl}
-                preload="metadata"
-                className="w-full h-full object-cover"
-                muted
-              />
+              {/* Video thumbnail: use captured first-frame image if available, else <video> fallback */}
+              {thumbnailDataUrl ? (
+                <img
+                  src={thumbnailDataUrl}
+                  alt={media.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                // biome-ignore lint/a11y/useMediaCaption: personal memory video, captions not applicable
+                <video
+                  src={objectUrl}
+                  preload="metadata"
+                  className="w-full h-full object-cover"
+                  muted
+                  onLoadedData={(e) => {
+                    e.currentTarget.currentTime = 0.001;
+                  }}
+                />
+              )}
               {/* Play overlay */}
               <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors duration-200">
                 <div className="bg-white/25 backdrop-blur-sm rounded-full p-3 group-hover:scale-110 transition-transform duration-200">
@@ -350,7 +419,7 @@ function MediaItem({ media, idx }: { media: Media; idx: number }) {
             </>
           )}
 
-          {!urlLoading && !blobUrl && (
+          {!urlLoading && !objectUrl && (
             <div className="absolute inset-0 flex items-center justify-center">
               {media.mediaType === MediaType.video ? (
                 <Video className="w-8 h-8 text-muted-foreground/40" />
@@ -396,7 +465,7 @@ function MediaItem({ media, idx }: { media: Media; idx: number }) {
             </p>
           </div>
 
-          {blobUrl && (
+          {objectUrl && (
             <Button
               variant="ghost"
               size="icon"
@@ -413,10 +482,10 @@ function MediaItem({ media, idx }: { media: Media; idx: number }) {
 
       {/* Lightbox */}
       <AnimatePresence>
-        {lightboxOpen && blobUrl && (
+        {lightboxOpen && objectUrl && (
           <MediaLightbox
             media={media}
-            url={blobUrl}
+            url={objectUrl}
             onClose={() => setLightboxOpen(false)}
           />
         )}
