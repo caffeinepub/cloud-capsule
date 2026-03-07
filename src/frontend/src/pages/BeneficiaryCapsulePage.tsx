@@ -32,6 +32,7 @@ import {
   useGetNeuronEntries,
 } from "../hooks/useQueries";
 import { formatTime } from "../utils/crypto";
+import { fetchWithCorrectMime } from "../utils/mimeDetect";
 
 function MemorialHeader({
   ownerName,
@@ -183,31 +184,8 @@ function MediaLightbox({
         onClick={async (e) => {
           e.stopPropagation();
           try {
-            const response = await fetch(url);
-            const rawBlob = await response.blob();
             const isVideo = media.mediaType === MediaType.video;
-
-            // Use actual MIME type so the downloaded file is playable/openable.
-            const mimeType =
-              rawBlob.type && rawBlob.type !== "application/octet-stream"
-                ? rawBlob.type
-                : isVideo
-                  ? "video/mp4"
-                  : "image/jpeg";
-
-            const extMap: Record<string, string> = {
-              "video/mp4": ".mp4",
-              "video/quicktime": ".mov",
-              "video/webm": ".webm",
-              "video/ogg": ".ogv",
-              "image/jpeg": ".jpg",
-              "image/png": ".png",
-              "image/gif": ".gif",
-              "image/webp": ".webp",
-            };
-            const ext = extMap[mimeType] ?? (isVideo ? ".mp4" : ".jpg");
-
-            const blob = new Blob([rawBlob], { type: mimeType });
+            const { blob, ext } = await fetchWithCorrectMime(url, isVideo);
             const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
             const objectUrl = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -298,33 +276,8 @@ function MediaItem({ media, idx }: { media: Media; idx: number }) {
   const handleDownload = useCallback(async () => {
     if (!blobUrl) return;
     try {
-      const response = await fetch(blobUrl);
-      const rawBlob = await response.blob();
       const isVideo = media.mediaType === MediaType.video;
-
-      // Use the actual MIME type from the fetched blob so the file is playable.
-      // Fall back to reasonable defaults only when the type is missing/generic.
-      let mimeType =
-        rawBlob.type && rawBlob.type !== "application/octet-stream"
-          ? rawBlob.type
-          : isVideo
-            ? "video/mp4"
-            : "image/jpeg";
-
-      // Derive a sensible extension from the detected MIME type.
-      const extMap: Record<string, string> = {
-        "video/mp4": ".mp4",
-        "video/quicktime": ".mov",
-        "video/webm": ".webm",
-        "video/ogg": ".ogv",
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/gif": ".gif",
-        "image/webp": ".webp",
-      };
-      const ext = extMap[mimeType] ?? (isVideo ? ".mp4" : ".jpg");
-
-      const blob = new Blob([rawBlob], { type: mimeType });
+      const { blob, ext } = await fetchWithCorrectMime(blobUrl, isVideo);
       const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");

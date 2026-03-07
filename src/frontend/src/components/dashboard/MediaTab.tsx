@@ -46,6 +46,7 @@ import {
   useGetCapsuleMedia,
 } from "../../hooks/useQueries";
 import { formatTime } from "../../utils/crypto";
+import { fetchWithCorrectMime } from "../../utils/mimeDetect";
 
 interface MediaTabProps {
   ownerPrincipal: Principal;
@@ -90,13 +91,8 @@ function MediaCard({
   const handleDownload = useCallback(async () => {
     if (!blobUrl) return;
     try {
-      const response = await fetch(blobUrl);
-      const rawBlob = await response.blob();
       const isVideo = media.mediaType === MediaType.video;
-      const mimeType = isVideo ? "video/mp4" : "image/jpeg";
-      const ext = isVideo ? ".mp4" : ".jpg";
-      // Re-type the blob to ensure the browser treats it correctly
-      const blob = new Blob([rawBlob], { type: mimeType });
+      const { blob, ext } = await fetchWithCorrectMime(blobUrl, isVideo);
       const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
