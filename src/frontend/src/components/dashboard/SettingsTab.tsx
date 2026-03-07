@@ -41,7 +41,11 @@ export default function SettingsTab({
     refetch: refetchCycles,
     isFetching: cyclesFetching,
   } = useGetCycleBalance();
-  const { data: canisterId, isLoading: canisterLoading } = useGetCanisterId();
+  const {
+    data: canisterId,
+    isLoading: canisterLoading,
+    isError: canisterError,
+  } = useGetCanisterId();
   const [copiedCanister, setCopiedCanister] = useState(false);
   const [copiedCanisterInDialog, setCopiedCanisterInDialog] = useState(false);
   const [profileName, setProfileName] = useState(userProfile?.name ?? "");
@@ -54,7 +58,7 @@ export default function SettingsTab({
   }, [userProfile?.name]);
 
   const handleCopyCanister = () => {
-    const id = canisterId?.toString() ?? "";
+    const id = canisterId ?? "";
     navigator.clipboard.writeText(id);
     setCopiedCanister(true);
     toast.success("Canister ID copied");
@@ -62,7 +66,7 @@ export default function SettingsTab({
   };
 
   const handleCopyCanisterInDialog = () => {
-    const id = canisterId?.toString() ?? "";
+    const id = canisterId ?? "";
     navigator.clipboard.writeText(id);
     setCopiedCanisterInDialog(true);
     toast.success("Canister ID copied");
@@ -84,7 +88,7 @@ export default function SettingsTab({
   };
 
   const cyclePercent =
-    cycleBalance !== undefined
+    cycleBalance != null
       ? Math.min(100, (Number(cycleBalance) / 10_000_000_000_000) * 100)
       : 0;
 
@@ -175,35 +179,35 @@ export default function SettingsTab({
           <div className="space-y-3">
             <div className="flex items-baseline gap-2">
               <span className="font-display text-3xl font-semibold text-foreground">
-                {cycleBalance !== undefined
-                  ? formatCycleBalance(cycleBalance)
-                  : "—"}
+                {cycleBalance != null ? formatCycleBalance(cycleBalance) : "—"}
               </span>
             </div>
 
             {/* Progress bar */}
-            <div className="space-y-1">
-              <div
-                className="h-2 rounded-full overflow-hidden"
-                style={{ background: "oklch(0.22 0.04 265)" }}
-              >
+            {cycleBalance != null && (
+              <div className="space-y-1">
                 <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${cyclePercent}%`,
-                    background:
-                      cyclePercent < 20
-                        ? "oklch(0.577 0.245 27.325)"
-                        : "linear-gradient(90deg, oklch(0.67 0.18 230), oklch(0.58 0.22 285))",
-                  }}
-                />
+                  className="h-2 rounded-full overflow-hidden"
+                  style={{ background: "oklch(0.22 0.04 265)" }}
+                >
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${cyclePercent}%`,
+                      background:
+                        cyclePercent < 20
+                          ? "oklch(0.577 0.245 27.325)"
+                          : "linear-gradient(90deg, oklch(0.67 0.18 230), oklch(0.58 0.22 285))",
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {cyclePercent < 20
+                    ? "⚠️ Low cycle balance — consider topping up"
+                    : "Cycle balance looks healthy"}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {cyclePercent < 20
-                  ? "⚠️ Low cycle balance — consider topping up"
-                  : "Cycle balance looks healthy"}
-              </p>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -221,13 +225,17 @@ export default function SettingsTab({
               className="flex-1 text-xs font-mono text-foreground break-all p-3 rounded-lg"
               style={{ background: "oklch(0.17 0.045 265 / 0.6)" }}
             >
-              {canisterId?.toString() ?? "Not available"}
+              {canisterId ??
+                (canisterError
+                  ? "Error loading — please refresh"
+                  : "Not available")}
             </code>
             <Button
               variant="outline"
               size="icon"
               className="h-10 w-10 flex-shrink-0"
               onClick={handleCopyCanister}
+              disabled={!canisterId}
               data-ocid="settings.copy_canister_id_button"
             >
               {copiedCanister ? (
@@ -339,13 +347,17 @@ export default function SettingsTab({
                       className="flex-1 text-xs font-mono text-foreground break-all p-3 rounded-lg"
                       style={{ background: "oklch(0.17 0.045 265 / 0.8)" }}
                     >
-                      {canisterId?.toString() ?? "Not available"}
+                      {canisterId ??
+                        (canisterError
+                          ? "Error loading — please refresh"
+                          : "Not available")}
                     </code>
                     <Button
                       variant="outline"
                       size="icon"
                       className="h-10 w-10 flex-shrink-0"
                       onClick={handleCopyCanisterInDialog}
+                      disabled={!canisterId}
                       data-ocid="settings.copy_canister_id_button"
                     >
                       {copiedCanisterInDialog ? (

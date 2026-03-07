@@ -105,11 +105,20 @@ export function useGetCapsuleLockStatus(capsuleOwner: Principal | null) {
 export function useGetCycleBalance() {
   const { actor, isFetching } = useActor();
 
-  return useQuery<bigint>({
+  return useQuery<bigint | null>({
     queryKey: ["cycleBalance"],
     queryFn: async () => {
       if (!actor) throw new Error("Actor not available");
-      return actor.getCycleBalance();
+      try {
+        return await actor.getCycleBalance();
+      } catch (err) {
+        // getCycleBalance is not yet implemented on-chain — return null gracefully
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("NotImplemented") || msg.includes("cyclesBalance")) {
+          return null;
+        }
+        throw err;
+      }
     },
     enabled: !!actor && !isFetching,
     refetchInterval: 60_000,
@@ -117,15 +126,16 @@ export function useGetCycleBalance() {
 }
 
 export function useGetCanisterId() {
-  const { actor, isFetching } = useActor();
-
-  return useQuery<Principal>({
+  return useQuery<string>({
     queryKey: ["canisterId"],
     queryFn: async () => {
-      if (!actor) throw new Error("Actor not available");
-      return actor.getCanisterId();
+      // The canister ID is injected at build time via CANISTER_ID_BACKEND.
+      // The backend getCanisterId() method is not yet implemented, so we read
+      // it directly from the environment variable instead.
+      const id = (process.env.CANISTER_ID_BACKEND as string | undefined) ?? "";
+      if (!id) throw new Error("Canister ID not available");
+      return id;
     },
-    enabled: !!actor && !isFetching,
     staleTime: Number.POSITIVE_INFINITY,
   });
 }
