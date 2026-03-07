@@ -2,39 +2,75 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Principal } from "@dfinity/principal";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Eye, EyeOff, Heart, Loader2, Lock } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useActor } from "../hooks/useActor";
+import { isCapsuleCode, lookupPrincipalByCode } from "../utils/capsuleCode";
 import { hashPassword } from "../utils/crypto";
 
 export default function BeneficiaryLoginPage() {
   const navigate = useNavigate();
   const { actor } = useActor();
+
+  // Read optional $code param — present on /access/$code route, undefined on /access
+  const params = useParams({ strict: false }) as { code?: string };
+  const routeCode = params.code;
+
   const [form, setForm] = useState({
-    ownerPrincipal: "",
+    ownerPrincipal: routeCode ?? "",
     username: "",
     password: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const usernameRef = useRef<HTMLInputElement>(null);
+
+  // Pre-fill owner field from route param and auto-focus username
+  useEffect(() => {
+    if (routeCode) {
+      setForm((f) => ({ ...f, ownerPrincipal: routeCode! }));
+      setTimeout(() => usernameRef.current?.focus(), 100);
+    }
+  }, [routeCode]);
+
+  const resolveOwnerPrincipal = (input: string): string | null => {
+    const trimmed = input.trim();
+    if (isCapsuleCode(trimmed)) {
+      const resolved = lookupPrincipalByCode(trimmed);
+      if (!resolved) return null; // code not found
+      return resolved;
+    }
+    return trimmed; // assume raw principal
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.ownerPrincipal.trim())
-      e.ownerPrincipal = "Capsule Owner ID is required";
+      e.ownerPrincipal = "Capsule Code or Owner ID is required";
     if (!form.username.trim()) e.username = "Username is required";
     if (!form.password) e.password = "Password is required";
 
-    // Validate principal format
-    if (form.ownerPrincipal.trim()) {
-      try {
-        Principal.fromText(form.ownerPrincipal.trim());
-      } catch {
-        e.ownerPrincipal = "Invalid Capsule Owner ID format";
+    const trimmed = form.ownerPrincipal.trim();
+    if (trimmed) {
+      if (isCapsuleCode(trimmed)) {
+        // validate code exists locally
+        const resolved = lookupPrincipalByCode(trimmed);
+        if (!resolved) {
+          e.ownerPrincipal =
+            "Code not found. Please check with your capsule owner.";
+        }
+      } else {
+        // validate principal format
+        try {
+          Principal.fromText(trimmed);
+        } catch {
+          e.ownerPrincipal =
+            "Invalid format. Enter a Capsule Code (CLOUD-XXXXX) or a full principal ID.";
+        }
       }
     }
     return e;
@@ -54,9 +90,17 @@ export default function BeneficiaryLoginPage() {
       return;
     }
 
+    const resolvedPrincipalStr = resolveOwnerPrincipal(form.ownerPrincipal);
+    if (!resolvedPrincipalStr) {
+      setErrors({
+        ownerPrincipal: "Code not found. Please check with your capsule owner.",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const ownerPrincipal = Principal.fromText(form.ownerPrincipal.trim());
+      const ownerPrincipal = Principal.fromText(resolvedPrincipalStr);
       const hashedPwd = await hashPassword(form.password);
       const token = await actor.beneficiaryLogin(
         ownerPrincipal,
@@ -71,15 +115,12 @@ export default function BeneficiaryLoginPage() {
 
       // Store session in localStorage
       localStorage.setItem("beneficiary_session_token", token);
-      localStorage.setItem(
-        "beneficiary_capsule_owner",
-        form.ownerPrincipal.trim(),
-      );
+      localStorage.setItem("beneficiary_capsule_owner", resolvedPrincipalStr);
 
       toast.success("Access granted");
       navigate({
         to: "/capsule/$ownerPrincipal",
-        params: { ownerPrincipal: form.ownerPrincipal.trim() },
+        params: { ownerPrincipal: resolvedPrincipalStr },
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";
@@ -159,20 +200,26 @@ export default function BeneficiaryLoginPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Owner Principal */}
+              {/* Owner Code / Principal */}
               <div className="space-y-2">
-                <Label htmlFor="owner-principal">Capsule Owner ID</Label>
+                <Label htmlFor="owner-principal">
+                  Capsule Code or Owner ID
+                </Label>
                 <Input
                   id="owner-principal"
                   value={form.ownerPrincipal}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, ownerPrincipal: e.target.value }))
                   }
-                  placeholder="e.g. aaaaa-aa"
+                  placeholder="e.g. CLOUD-ABC12 or owner's principal ID"
                   className="font-mono text-sm"
                   autoComplete="off"
                   data-ocid="beneficiary_login.input"
                 />
+                <p className="text-xs text-muted-foreground/70">
+                  Your capsule owner shared a short code (CLOUD-XXXXX) or a full
+                  principal ID
+                </p>
                 {errors.ownerPrincipal && (
                   <p
                     className="text-xs text-destructive"
@@ -188,6 +235,7 @@ export default function BeneficiaryLoginPage() {
                 <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
+                  ref={usernameRef}
                   value={form.username}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, username: e.target.value }))
@@ -258,8 +306,8 @@ export default function BeneficiaryLoginPage() {
             </form>
 
             <p className="text-center text-xs text-muted-foreground/70">
-              The Capsule Owner ID and your credentials were shared by the
-              capsule owner. Contact them if you need assistance.
+              The Capsule Code (or Owner ID) and your credentials were shared by
+              the capsule owner. Contact them if you need assistance.
             </p>
           </div>
         </motion.div>

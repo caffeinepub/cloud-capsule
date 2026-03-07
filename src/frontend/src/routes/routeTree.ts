@@ -28,6 +28,12 @@ const accessRoute = createRoute({
   component: BeneficiaryLoginPage,
 });
 
+const accessWithCodeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/access/$code",
+  component: BeneficiaryLoginPage,
+});
+
 const capsuleRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/capsule/$ownerPrincipal",
@@ -43,6 +49,7 @@ const adminRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   dashboardRoute,
+  accessWithCodeRoute,
   accessRoute,
   capsuleRoute,
   adminRoute,

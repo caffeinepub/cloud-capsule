@@ -32,6 +32,7 @@ import {
   useSaveCallerUserProfile,
   useToggleCapsuleLock,
 } from "../hooks/useQueries";
+import { getOrCreateCapsuleCode } from "../utils/capsuleCode";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -94,6 +95,15 @@ export default function DashboardPage() {
       setBannerCreating(false);
     }
   };
+
+  // Generate / retrieve the capsule short code (only once a capsule exists)
+  const capsuleCode =
+    ownerPrincipal && userProfile
+      ? getOrCreateCapsuleCode(ownerPrincipal.toString())
+      : null;
+  const shareableLink = capsuleCode
+    ? `${window.location.origin}/access/${capsuleCode}`
+    : null;
 
   const handleToggleLock = async () => {
     try {
@@ -331,6 +341,8 @@ export default function DashboardPage() {
               capsuleLocked={capsuleLocked}
               onToggle={handleToggleLock}
               isToggling={toggleLock.isPending}
+              capsuleCode={capsuleCode}
+              shareableLink={shareableLink}
             />
           </TabsContent>
         </Tabs>

@@ -1,18 +1,32 @@
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Lock, ShieldAlert, ShieldCheck, Unlock } from "lucide-react";
+import {
+  Copy,
+  Link2,
+  Loader2,
+  Lock,
+  ShieldAlert,
+  ShieldCheck,
+  Unlock,
+} from "lucide-react";
 import { motion } from "motion/react";
+import { toast } from "sonner";
 
 interface AccessTabProps {
   capsuleLocked: boolean;
   onToggle: () => Promise<void>;
   isToggling: boolean;
+  capsuleCode?: string | null;
+  shareableLink?: string | null;
 }
 
 export default function AccessTab({
   capsuleLocked,
   onToggle,
   isToggling,
+  capsuleCode,
+  shareableLink,
 }: AccessTabProps) {
   return (
     <motion.div
@@ -184,6 +198,114 @@ export default function AccessTab({
           </p>
         </div>
       </motion.div>
+
+      {/* Share Your Capsule */}
+      <div
+        className="rounded-2xl p-6 space-y-5 border"
+        style={{
+          background: "oklch(0.17 0.045 265 / 0.7)",
+          borderColor: "oklch(0.67 0.18 230 / 0.2)",
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <Link2
+            className="w-5 h-5"
+            style={{ color: "oklch(0.72 0.18 225)" }}
+          />
+          <h3 className="font-display text-base font-semibold text-foreground">
+            Share Your Capsule
+          </h3>
+        </div>
+
+        {capsuleCode ? (
+          <>
+            {/* Short Code */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Capsule Code
+              </p>
+              <div className="flex items-center gap-2">
+                <code
+                  className="flex-1 text-sm font-mono font-semibold px-3 py-2 rounded-lg tracking-widest"
+                  style={{
+                    background: "oklch(0.67 0.18 230 / 0.1)",
+                    color: "oklch(0.78 0.16 230)",
+                    border: "1px solid oklch(0.67 0.18 230 / 0.25)",
+                  }}
+                >
+                  {capsuleCode}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 flex-shrink-0"
+                  onClick={() => {
+                    navigator.clipboard.writeText(capsuleCode);
+                    toast.success("Capsule code copied");
+                  }}
+                  data-ocid="access.code_copy_button"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Shareable Link */}
+            {shareableLink && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Shareable Access Link
+                </p>
+                <p className="text-xs text-muted-foreground/70">
+                  Send this link — beneficiaries click it and only need to enter
+                  their username and password
+                </p>
+                <div
+                  className="flex items-center gap-2 rounded-xl p-3"
+                  style={{
+                    background: "oklch(0.67 0.18 230 / 0.07)",
+                    border: "1px solid oklch(0.67 0.18 230 / 0.3)",
+                    boxShadow: "0 0 14px oklch(0.67 0.18 230 / 0.08)",
+                  }}
+                >
+                  <code
+                    className="flex-1 text-xs font-mono break-all"
+                    style={{ color: "oklch(0.78 0.14 230)" }}
+                  >
+                    {shareableLink}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 flex-shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareableLink);
+                      toast.success("Link copied to clipboard");
+                    }}
+                    data-ocid="access.link_copy_button"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Your capsule was created before short codes were available. Share
+            your full principal ID (found in the Beneficiaries tab) with
+            beneficiaries — they can use it on the{" "}
+            <a
+              href="/access"
+              className="underline underline-offset-2"
+              style={{ color: "oklch(0.72 0.18 225)" }}
+            >
+              access page
+            </a>
+            .
+          </p>
+        )}
+      </div>
     </motion.div>
   );
 }

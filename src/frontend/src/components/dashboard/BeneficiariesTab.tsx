@@ -26,6 +26,7 @@ import {
   Eye,
   EyeOff,
   Info,
+  Link2,
   Loader2,
   Plus,
   Trash2,
@@ -40,6 +41,7 @@ import {
   useGetBeneficiaries,
   useRemoveBeneficiary,
 } from "../../hooks/useQueries";
+import { getOrCreateCapsuleCode } from "../../utils/capsuleCode";
 import { hashPassword } from "../../utils/crypto";
 import { formatTime } from "../../utils/crypto";
 
@@ -61,6 +63,12 @@ export default function BeneficiariesTab() {
 
   const ownerPrincipal = identity?.getPrincipal().toString() ?? "";
   const appUrl = window.location.origin;
+
+  // Generate / retrieve the short capsule code for this owner
+  const capsuleCode = ownerPrincipal
+    ? getOrCreateCapsuleCode(ownerPrincipal)
+    : null;
+  const shareableLink = capsuleCode ? `${appUrl}/access/${capsuleCode}` : null;
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -114,7 +122,9 @@ export default function BeneficiariesTab() {
   };
 
   const handleCopyAccess = (username: string) => {
-    const info = `Cloud Capsule Access:\nURL: ${appUrl}/access\nCapsule Owner ID: ${ownerPrincipal}\nUsername: ${username}`;
+    const info = shareableLink
+      ? `Cloud Capsule Access:\nLink: ${shareableLink}\nCapsule Code: ${capsuleCode}\nUsername: ${username}\nPassword: (set by owner)`
+      : `Cloud Capsule Access:\nURL: ${appUrl}/access\nCapsule Owner ID: ${ownerPrincipal}\nUsername: ${username}\nPassword: (set by owner)`;
     navigator.clipboard.writeText(info);
     toast.success("Access info copied to clipboard");
   };
@@ -151,22 +161,115 @@ export default function BeneficiariesTab() {
       >
         <Info className="w-4 h-4" style={{ color: "oklch(0.67 0.18 230)" }} />
         <AlertDescription className="text-sm">
-          Share the access link, your <strong>Capsule Owner ID</strong>, and
-          their <strong>username/password</strong> with each beneficiary. They
-          can log in at{" "}
-          <code
-            className="text-xs px-1 py-0.5 rounded"
-            style={{ background: "oklch(0.52 0.12 62 / 0.1)" }}
-          >
-            {appUrl}/access
-          </code>
+          Share the <strong>short Capsule Code</strong> OR the{" "}
+          <strong>shareable link</strong>, plus their username and password,
+          with each beneficiary.
         </AlertDescription>
       </Alert>
 
-      {/* Principal ID */}
+      {/* Capsule Code */}
+      {capsuleCode && (
+        <div
+          className="capsule-card p-5 space-y-3"
+          data-ocid="beneficiaries.code_card"
+        >
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">
+              Your Capsule Code
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              Share this short code with beneficiaries instead of the long
+              principal ID
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <code
+              className="flex-1 text-sm font-mono font-semibold px-3 py-2 rounded-lg tracking-widest"
+              style={{
+                background: "oklch(0.67 0.18 230 / 0.1)",
+                color: "oklch(0.78 0.16 230)",
+                border: "1px solid oklch(0.67 0.18 230 / 0.25)",
+              }}
+            >
+              {capsuleCode}
+            </code>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 flex-shrink-0"
+              onClick={() => {
+                navigator.clipboard.writeText(capsuleCode);
+                toast.success("Capsule code copied");
+              }}
+              data-ocid="beneficiaries.code_copy_button"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Shareable Link */}
+      {shareableLink && (
+        <div
+          className="capsule-card p-5 space-y-3"
+          style={{
+            border: "1px solid oklch(0.67 0.18 230 / 0.4)",
+            boxShadow:
+              "0 0 18px oklch(0.67 0.18 230 / 0.1), inset 0 0 0 1px oklch(0.67 0.18 230 / 0.05)",
+          }}
+          data-ocid="beneficiaries.link_card"
+        >
+          <div className="flex items-center gap-2">
+            <Link2
+              className="w-4 h-4 flex-shrink-0"
+              style={{ color: "oklch(0.72 0.18 225)" }}
+            />
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Shareable Access Link
+              </p>
+              <p className="text-xs text-muted-foreground/70">
+                Send this link — beneficiaries just click and enter their
+                credentials
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <code
+              className="flex-1 text-xs font-mono px-3 py-2 rounded-lg break-all"
+              style={{
+                background: "oklch(0.17 0.045 265 / 0.6)",
+                color: "oklch(0.78 0.14 230)",
+                border: "1px solid oklch(0.67 0.18 230 / 0.2)",
+              }}
+            >
+              {shareableLink}
+            </code>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 flex-shrink-0"
+              onClick={() => {
+                navigator.clipboard.writeText(shareableLink);
+                toast.success("Link copied to clipboard");
+              }}
+              data-ocid="beneficiaries.link_copy_button"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced: Full Principal ID */}
       <div className="capsule-card p-4 space-y-2">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Your Capsule Owner ID
+          Advanced: Full Principal ID
+        </p>
+        <p className="text-xs text-muted-foreground/60">
+          Legacy identifier for beneficiaries who received your full principal
+          ID before short codes were introduced
         </p>
         <div className="flex items-center gap-2">
           <code
@@ -419,12 +522,21 @@ export default function BeneficiariesTab() {
               style={{ background: "oklch(0.67 0.18 230 / 0.07)" }}
             >
               <p className="font-medium text-foreground">Remember to share:</p>
-              <p className="text-muted-foreground">
-                • The app URL: <strong>{appUrl}/access</strong>
-              </p>
-              <p className="text-muted-foreground">
-                • Your Principal ID (Capsule Owner ID)
-              </p>
+              {shareableLink ? (
+                <>
+                  <p className="text-muted-foreground">
+                    • Shareable link:{" "}
+                    <strong className="break-all">{shareableLink}</strong>
+                  </p>
+                  <p className="text-muted-foreground">
+                    • Or Capsule Code: <strong>{capsuleCode}</strong>
+                  </p>
+                </>
+              ) : (
+                <p className="text-muted-foreground">
+                  • The app URL: <strong>{appUrl}/access</strong>
+                </p>
+              )}
               <p className="text-muted-foreground">
                 • Their username and password
               </p>
