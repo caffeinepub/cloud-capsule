@@ -18,7 +18,11 @@ export function useGetCallerUserProfile() {
     queryKey: ["currentUserProfile"],
     queryFn: async () => {
       if (!actor) throw new Error("Actor not available");
-      return actor.getCallerUserProfile();
+      const result = await actor.getCallerUserProfile();
+      // Handle Motoko optional: ?UserProfile comes back as [] | [UserProfile]
+      if (result === null || result === undefined) return null;
+      if (Array.isArray(result)) return result.length > 0 ? result[0] : null;
+      return result;
     },
     enabled: !!actor && !actorFetching,
     retry: 2,
@@ -28,7 +32,8 @@ export function useGetCallerUserProfile() {
   return {
     ...query,
     isLoading: actorFetching || query.isLoading,
-    isFetched: !!actor && query.isFetched,
+    // Do NOT gate isFetched on actor — the query result is already correct once fetched
+    isFetched: query.isFetched,
   };
 }
 
@@ -76,6 +81,22 @@ export function useToggleCapsuleLock() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["capsuleLockStatus"] });
     },
+  });
+}
+
+export function useGetCapsuleLockStatus(capsuleOwner: Principal | null) {
+  const { actor, isFetching } = useActor();
+
+  return useQuery<boolean>({
+    queryKey: ["capsuleLockStatus", capsuleOwner?.toString()],
+    queryFn: async () => {
+      if (!actor || !capsuleOwner)
+        throw new Error("Actor or owner not available");
+      return actor.getCapsuleLockStatus(capsuleOwner);
+    },
+    enabled: !!actor && !isFetching && !!capsuleOwner,
+    // Refresh every 30s so beneficiary page detects live lock changes
+    refetchInterval: 30_000,
   });
 }
 

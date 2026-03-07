@@ -74,6 +74,7 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCanisterId(): Promise<Principal>;
+    getCapsuleLockStatus(capsuleOwner: Principal): Promise<boolean>;
     getCapsuleMedia(capsuleOwner: Principal): Promise<Array<Media>>;
     getCapsuleNotes(capsuleOwner: Principal): Promise<Array<Note>>;
     getCycleBalance(): Promise<bigint>;

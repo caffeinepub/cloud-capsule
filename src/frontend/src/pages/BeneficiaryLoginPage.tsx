@@ -83,9 +83,15 @@ export default function BeneficiaryLoginPage() {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Login failed";
-      if (
+      if (message.toLowerCase().includes("capsule is locked")) {
+        setErrors({
+          ownerPrincipal:
+            "This capsule is not currently available. The owner has not unlocked it for access.",
+        });
+      } else if (
         message.toLowerCase().includes("invalid") ||
-        message.toLowerCase().includes("password")
+        message.toLowerCase().includes("password") ||
+        message.toLowerCase().includes("credentials")
       ) {
         setErrors({ password: "Invalid username or password" });
       } else {

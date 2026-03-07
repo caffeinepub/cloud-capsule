@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import type { Principal } from "@dfinity/principal";
 import {
+  Download,
   ImageIcon,
   Images,
   Loader2,
@@ -31,11 +32,11 @@ import {
   Trash2,
   Upload,
   Video,
+  X,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ExternalBlob } from "../../backend";
 import type { Media } from "../../backend.d";
 import { MediaType } from "../../backend.d";
 import { useBlobUpload } from "../../hooks/useBlobUpload";
@@ -55,125 +56,292 @@ function MediaCard({
   idx,
   onDelete,
 }: { media: Media; idx: number; onDelete: () => void }) {
+  const { getBlobUrl } = useBlobUpload();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [urlLoading, setUrlLoading] = useState(true);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  // Load blob URL on mount using the useBlobUpload hook's getBlobUrl
+  // Load blob URL correctly via getBlobUrl (async, returns CDN URL)
   useEffect(() => {
-    if (media.blobId) {
-      // The blobId stored in backend is the hash; use ExternalBlob for display
-      // blobId is the hash returned from upload - we use it as the direct URL key
-      const url = ExternalBlob.fromURL(media.blobId).getDirectURL();
-      setBlobUrl(url);
+    if (!media.blobId) {
+      setUrlLoading(false);
+      return;
     }
-    setLoading(false);
-  }, [media.blobId]);
+    let cancelled = false;
+    setUrlLoading(true);
+    getBlobUrl(media.blobId)
+      .then((url) => {
+        if (!cancelled) {
+          setBlobUrl(url || null);
+          setUrlLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBlobUrl(null);
+          setUrlLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [media.blobId, getBlobUrl]);
+
+  const handleDownload = useCallback(async () => {
+    if (!blobUrl) return;
+    try {
+      const response = await fetch(blobUrl);
+      const rawBlob = await response.blob();
+      const isVideo = media.mediaType === MediaType.video;
+      const mimeType = isVideo ? "video/mp4" : "image/jpeg";
+      const ext = isVideo ? ".mp4" : ".jpg";
+      // Re-type the blob to ensure the browser treats it correctly
+      const blob = new Blob([rawBlob], { type: mimeType });
+      const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      toast.error("Download failed. Please try again.");
+    }
+  }, [blobUrl, media.title, media.mediaType]);
 
   return (
-    <motion.div
-      className="capsule-card overflow-hidden flex flex-col"
-      variants={{
-        hidden: { opacity: 0, y: 12 },
-        visible: { opacity: 1, y: 0 },
-      }}
-      data-ocid={`media.item.${idx + 1}`}
-    >
-      <div className="relative bg-muted" style={{ aspectRatio: "16/10" }}>
-        {loading && <Skeleton className="absolute inset-0" />}
-        {!loading && blobUrl && media.mediaType === MediaType.photo && (
-          <img
-            src={blobUrl}
-            alt={media.title}
-            className="w-full h-full object-cover"
-            onError={() => setBlobUrl(null)}
-          />
-        )}
-        {!loading && blobUrl && media.mediaType === MediaType.video && (
-          // biome-ignore lint/a11y/useMediaCaption: video captions not required for personal memory uploads
-          <video
-            src={blobUrl}
-            controls
-            className="w-full h-full object-cover"
-            preload="metadata"
-          />
-        )}
-        {!loading && !blobUrl && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            {media.mediaType === MediaType.video ? (
-              <Video className="w-8 h-8 text-muted-foreground/40" />
-            ) : (
-              <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
-            )}
+    <>
+      <motion.div
+        className="capsule-card overflow-hidden flex flex-col"
+        variants={{
+          hidden: { opacity: 0, y: 12 },
+          visible: { opacity: 1, y: 0 },
+        }}
+        data-ocid={`media.item.${idx + 1}`}
+      >
+        {/* Thumbnail — clickable to open lightbox */}
+        <button
+          type="button"
+          className="relative bg-muted w-full overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 group"
+          style={{ aspectRatio: "16/10" }}
+          onClick={() => setLightboxOpen(true)}
+          disabled={urlLoading || !blobUrl}
+          aria-label={`View ${media.title}`}
+          data-ocid={`media.open_modal_button.${idx + 1}`}
+        >
+          {urlLoading && <Skeleton className="absolute inset-0 rounded-none" />}
+
+          {!urlLoading && blobUrl && media.mediaType === MediaType.photo && (
+            <>
+              <img
+                src={blobUrl}
+                alt={media.title}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                onError={() => setBlobUrl(null)}
+              />
+              {/* Hover overlay */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/20 backdrop-blur-sm rounded-full p-2">
+                  <ImageIcon className="w-5 h-5 text-white" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {!urlLoading && blobUrl && media.mediaType === MediaType.video && (
+            <>
+              {/* Video poster / thumbnail area */}
+              {/* biome-ignore lint/a11y/useMediaCaption: video captions not required for personal memory uploads */}
+              <video
+                src={blobUrl}
+                className="w-full h-full object-cover"
+                preload="metadata"
+                muted
+              />
+              {/* Play overlay */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors duration-200">
+                <div className="bg-white/25 backdrop-blur-sm rounded-full p-3 group-hover:scale-110 transition-transform duration-200">
+                  <Play className="w-5 h-5 text-white fill-white" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {!urlLoading && !blobUrl && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              {media.mediaType === MediaType.video ? (
+                <Video className="w-8 h-8 text-muted-foreground/40" />
+              ) : (
+                <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
+              )}
+            </div>
+          )}
+
+          {/* Type badge */}
+          <div className="absolute top-2 left-2 pointer-events-none">
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                background: "oklch(0.13 0.04 265 / 0.75)",
+                color: "oklch(0.82 0.1 225)",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              {media.mediaType === MediaType.video ? (
+                <>
+                  <Play className="w-2.5 h-2.5" />
+                  Video
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="w-2.5 h-2.5" />
+                  Photo
+                </>
+              )}
+            </span>
           </div>
-        )}
-        {/* Type badge */}
-        <div className="absolute top-2 left-2">
-          <span
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+        </button>
+
+        <div className="p-4 flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-sm text-foreground truncate">
+              {media.title}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {formatTime(media.createdAt)}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Download button */}
+            {blobUrl && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleDownload}
+                title="Download"
+                data-ocid={`media.download_button.${idx + 1}`}
+              >
+                <Download className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+              </Button>
+            )}
+
+            {/* Delete button */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  data-ocid={`media.delete_button.${idx + 1}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this media?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    "{media.title}" will be permanently removed from your
+                    capsule.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-ocid="media.cancel_button">
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={onDelete}
+                    data-ocid="media.confirm_button"
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Lightbox Dialog */}
+      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+        <DialogContent
+          className="max-w-3xl w-full p-0 overflow-hidden"
+          data-ocid="media.dialog"
+          style={{ background: "oklch(0.1 0.03 265)" }}
+        >
+          <DialogHeader className="px-5 pt-5 pb-3">
+            <div className="flex items-center justify-between gap-4">
+              <DialogTitle className="font-display text-foreground truncate">
+                {media.title}
+              </DialogTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 flex-shrink-0"
+                onClick={() => setLightboxOpen(false)}
+                data-ocid="media.close_button"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {formatTime(media.createdAt)}
+            </p>
+          </DialogHeader>
+
+          {/* Media display */}
+          <div
+            className="relative w-full flex items-center justify-center"
             style={{
-              background: "oklch(0.13 0.04 265 / 0.75)",
-              color: "oklch(0.82 0.1 225)",
-              backdropFilter: "blur(4px)",
+              background: "oklch(0.08 0.02 265)",
+              minHeight: "300px",
+              maxHeight: "70vh",
             }}
           >
-            {media.mediaType === MediaType.video ? (
-              <>
-                <Play className="w-2.5 h-2.5" />
-                Video
-              </>
-            ) : (
-              <>
-                <ImageIcon className="w-2.5 h-2.5" />
-                Photo
-              </>
+            {blobUrl && media.mediaType === MediaType.photo && (
+              <img
+                src={blobUrl}
+                alt={media.title}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
             )}
-          </span>
-        </div>
-      </div>
+            {blobUrl && media.mediaType === MediaType.video && (
+              // biome-ignore lint/a11y/useMediaCaption: video captions not required for personal memory uploads
+              <video
+                src={blobUrl}
+                controls
+                autoPlay
+                className="max-w-full max-h-[70vh] object-contain"
+                style={{ outline: "none" }}
+              />
+            )}
+          </div>
 
-      <div className="p-4 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-medium text-sm text-foreground truncate">
-            {media.title}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {formatTime(media.createdAt)}
-          </p>
-        </div>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+          {/* Footer actions */}
+          <DialogFooter className="px-5 py-4 flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {media.mediaType === MediaType.video ? "Video" : "Photo"}
+            </p>
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 flex-shrink-0"
-              data-ocid={`media.delete_button.${idx + 1}`}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleDownload}
+              disabled={!blobUrl}
+              data-ocid="media.download_button"
             >
-              <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+              <Download className="w-4 h-4" />
+              Download
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete this media?</AlertDialogTitle>
-              <AlertDialogDescription>
-                "{media.title}" will be permanently removed from your capsule.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel data-ocid="media.cancel_button">
-                Cancel
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={onDelete}
-                data-ocid="media.confirm_button"
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-    </motion.div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -392,6 +560,7 @@ export default function MediaTab({ ownerPrincipal }: MediaTabProps) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Family vacation 2023"
+                data-ocid="media.input"
               />
             </div>
 
@@ -443,7 +612,7 @@ export default function MediaTab({ ownerPrincipal }: MediaTabProps) {
                   !selectedFile ||
                   !title.trim()
                 }
-                data-ocid="media.upload_button"
+                data-ocid="media.submit_button"
                 className="bg-gradient-sky border-0 text-white hover:opacity-90 transition-opacity"
               >
                 {isUploading || createMedia.isPending ? (

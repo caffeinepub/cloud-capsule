@@ -231,6 +231,13 @@ actor {
     capsules.add(caller, updatedCapsule);
   };
 
+  public query ({ caller }) func getCapsuleLockStatus(capsuleOwner : Principal) : async Bool {
+    switch (capsules.get(capsuleOwner)) {
+      case (null) { true }; // Default to locked if capsule does not exist
+      case (?capsule) { capsule.locked };
+    };
+  };
+
   // Note Management
   public shared ({ caller }) func createNote(title : Text, body : Text) : async Text {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
@@ -522,6 +529,10 @@ actor {
   public shared func beneficiaryLogin(capsuleOwner : Principal, username : Text, password : Text) : async Text {
     let capsule = getCapsuleByOwner(capsuleOwner);
 
+    if (capsule.locked) {
+      Runtime.trap("Capsule is locked");
+    };
+
     switch (capsule.beneficiaries.get(username)) {
       case (null) { Runtime.trap("Invalid credentials") };
       case (?beneficiary) {
@@ -557,7 +568,16 @@ actor {
     switch (beneficiarySessions.get(token)) {
       case (null) { false };
       case (?(owner, username, expiresAt)) {
-        currentTime <= expiresAt;
+        if (currentTime > expiresAt) {
+          false;
+        } else {
+          switch (capsules.get(owner)) {
+            case (null) { false };
+            case (?capsule) {
+              not capsule.locked;
+            };
+          };
+        };
       };
     };
   };

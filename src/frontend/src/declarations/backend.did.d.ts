@@ -100,6 +100,7 @@ export interface _SERVICE {
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCanisterId' : ActorMethod<[], Principal>,
+  'getCapsuleLockStatus' : ActorMethod<[Principal], boolean>,
   'getCapsuleMedia' : ActorMethod<[Principal], Array<Media>>,
   'getCapsuleNotes' : ActorMethod<[Principal], Array<Note>>,
   'getCycleBalance' : ActorMethod<[], bigint>,

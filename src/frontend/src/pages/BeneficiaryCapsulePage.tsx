@@ -3,16 +3,29 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Principal } from "@dfinity/principal";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Brain, FileText, Heart, Image, Loader2, LogOut } from "lucide-react";
-import { motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  Brain,
+  Download,
+  FileText,
+  Heart,
+  ImageIcon,
+  Loader2,
+  Lock,
+  LogOut,
+  Play,
+  Video,
+  X,
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ExternalBlob } from "../backend";
 import type { Media, Note } from "../backend.d";
 import { MediaType } from "../backend.d";
 import { useActor } from "../hooks/useActor";
+import { useBlobUpload } from "../hooks/useBlobUpload";
 import {
   type NeuronEntryWithId,
+  useGetCapsuleLockStatus,
   useGetCapsuleMedia,
   useGetCapsuleNotes,
   useGetGlobalInstructions,
@@ -107,50 +120,313 @@ function NoteCard({ note, idx }: { note: Note; idx: number }) {
   );
 }
 
-function MediaItem({ media, idx }: { media: Media; idx: number }) {
-  const url = media.blobId
-    ? ExternalBlob.fromURL(media.blobId).getDirectURL()
-    : null;
+function MediaLightbox({
+  media,
+  url,
+  onClose,
+}: {
+  media: Media;
+  url: string;
+  onClose: () => void;
+}) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Prevent body scroll while lightbox is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === overlayRef.current) onClose();
+  };
 
   return (
     <motion.div
-      className="capsule-card overflow-hidden"
-      variants={{
-        hidden: { opacity: 0, y: 12 },
-        visible: { opacity: 1, y: 0 },
-      }}
-      data-ocid={`capsule.media.item.${idx + 1}`}
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onClick={handleOverlayClick}
+      data-ocid="capsule.media.lightbox"
+      aria-label={`Viewing: ${media.title}`}
     >
-      <div className="relative bg-muted" style={{ aspectRatio: "16/10" }}>
-        {url && media.mediaType === MediaType.photo && (
+      {/* Close button */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+        aria-label="Close"
+        data-ocid="capsule.media.lightbox.close_button"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
+      {/* Download button (lightbox) */}
+      <button
+        type="button"
+        className="absolute top-4 right-16 z-10 w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+        aria-label="Download"
+        onClick={async (e) => {
+          e.stopPropagation();
+          try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const ext = media.mediaType === MediaType.video ? ".mp4" : ".jpg";
+            const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = objectUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(objectUrl);
+          } catch {
+            // silent — download errors are non-critical in lightbox
+          }
+        }}
+        data-ocid="capsule.media.lightbox.download_button"
+      >
+        <Download className="w-5 h-5" />
+      </button>
+
+      {/* Media content */}
+      <motion.div
+        className="relative flex items-center justify-center max-w-[90vw] max-h-[85vh]"
+        initial={{ scale: 0.92, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.92, opacity: 0 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {media.mediaType === MediaType.photo ? (
           <img
             src={url}
             alt={media.title}
-            className="w-full h-full object-cover"
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+            draggable={false}
           />
-        )}
-        {url && media.mediaType === MediaType.video && (
+        ) : (
           // biome-ignore lint/a11y/useMediaCaption: personal memory video, captions not applicable
           <video
             src={url}
             controls
-            className="w-full h-full object-cover"
-            preload="metadata"
+            autoPlay
+            className="max-w-[90vw] max-h-[85vh] rounded-lg shadow-2xl"
           />
         )}
-        {!url && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Image className="w-8 h-8 text-muted-foreground/40" />
-          </div>
-        )}
-      </div>
-      <div className="p-4">
-        <p className="font-medium text-sm text-foreground">{media.title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {formatTime(media.createdAt)}
+      </motion.div>
+
+      {/* Title bar at bottom */}
+      <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
+        <p className="text-white/70 text-sm font-medium px-4 truncate">
+          {media.title}
         </p>
       </div>
     </motion.div>
+  );
+}
+
+function MediaItem({ media, idx }: { media: Media; idx: number }) {
+  const { getBlobUrl } = useBlobUpload();
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [urlLoading, setUrlLoading] = useState(true);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // Resolve the blob URL asynchronously via the actor (same approach as MediaTab)
+  useEffect(() => {
+    if (!media.blobId) {
+      setUrlLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setUrlLoading(true);
+    getBlobUrl(media.blobId)
+      .then((url) => {
+        if (!cancelled) {
+          setBlobUrl(url || null);
+          setUrlLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBlobUrl(null);
+          setUrlLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [media.blobId, getBlobUrl]);
+
+  const handleDownload = useCallback(async () => {
+    if (!blobUrl) return;
+    try {
+      const response = await fetch(blobUrl);
+      const rawBlob = await response.blob();
+      const isVideo = media.mediaType === MediaType.video;
+      const mimeType = isVideo ? "video/mp4" : "image/jpeg";
+      const ext = isVideo ? ".mp4" : ".jpg";
+      // Re-type the blob to ensure the browser treats it correctly
+      const blob = new Blob([rawBlob], { type: mimeType });
+      const filename = `${media.title.replace(/[^a-z0-9_\-. ]/gi, "_")}${ext}`;
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      toast.error("Download failed. Please try again.");
+    }
+  }, [blobUrl, media.title, media.mediaType]);
+
+  return (
+    <>
+      <motion.div
+        className="capsule-card overflow-hidden group flex flex-col"
+        variants={{
+          hidden: { opacity: 0, y: 12 },
+          visible: { opacity: 1, y: 0 },
+        }}
+        data-ocid={`capsule.media.item.${idx + 1}`}
+      >
+        {/* Thumbnail area — clickable to open lightbox */}
+        <button
+          type="button"
+          className="relative w-full bg-muted overflow-hidden cursor-pointer block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          style={{ aspectRatio: "16/9" }}
+          onClick={() => blobUrl && setLightboxOpen(true)}
+          disabled={urlLoading || !blobUrl}
+          aria-label={`View ${media.title} full size`}
+          data-ocid={`capsule.media.open_modal_button.${idx + 1}`}
+        >
+          {urlLoading && <Skeleton className="absolute inset-0 rounded-none" />}
+
+          {!urlLoading && blobUrl && media.mediaType === MediaType.photo && (
+            <>
+              <img
+                src={blobUrl}
+                alt={media.title}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+                onError={() => setBlobUrl(null)}
+              />
+              {/* Hover overlay */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-center justify-center">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                  <ImageIcon className="w-5 h-5 text-white" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {!urlLoading && blobUrl && media.mediaType === MediaType.video && (
+            <>
+              {/* biome-ignore lint/a11y/useMediaCaption: personal memory video, captions not applicable */}
+              <video
+                src={blobUrl}
+                preload="metadata"
+                className="w-full h-full object-cover"
+                muted
+              />
+              {/* Play overlay */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors duration-200">
+                <div className="bg-white/25 backdrop-blur-sm rounded-full p-3 group-hover:scale-110 transition-transform duration-200">
+                  <Play className="w-5 h-5 text-white fill-white" />
+                </div>
+              </div>
+            </>
+          )}
+
+          {!urlLoading && !blobUrl && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              {media.mediaType === MediaType.video ? (
+                <Video className="w-8 h-8 text-muted-foreground/40" />
+              ) : (
+                <ImageIcon className="w-8 h-8 text-muted-foreground/40" />
+              )}
+            </div>
+          )}
+
+          {/* Type badge */}
+          <div className="absolute top-2 left-2 pointer-events-none">
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                background: "oklch(0.13 0.04 265 / 0.75)",
+                color: "oklch(0.82 0.1 225)",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              {media.mediaType === MediaType.video ? (
+                <>
+                  <Play className="w-2.5 h-2.5" />
+                  Video
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="w-2.5 h-2.5" />
+                  Photo
+                </>
+              )}
+            </span>
+          </div>
+        </button>
+
+        {/* Card footer with title and download button */}
+        <div className="p-4 flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-sm text-foreground truncate">
+              {media.title}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {formatTime(media.createdAt)}
+            </p>
+          </div>
+
+          {blobUrl && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 flex-shrink-0"
+              onClick={handleDownload}
+              title="Download"
+              data-ocid={`capsule.media.download_button.${idx + 1}`}
+            >
+              <Download className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground" />
+            </Button>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Lightbox */}
+      <AnimatePresence>
+        {lightboxOpen && blobUrl && (
+          <MediaLightbox
+            media={media}
+            url={blobUrl}
+            onClose={() => setLightboxOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -244,6 +520,7 @@ export default function BeneficiaryCapsulePage() {
     }
 
     try {
+      // isLoggedInToBeneficiarySession now also checks capsule.locked on the backend
       const valid = await actor.isLoggedInToBeneficiarySession(token);
       if (valid) {
         const principal = Principal.fromText(ownerPrincipalStr);
@@ -263,13 +540,33 @@ export default function BeneficiaryCapsulePage() {
     if (actor) validateSession();
   }, [actor, validateSession]);
 
-  // Redirect if invalid
+  // Redirect if session is fully invalid (expired / bad token)
+  // We only redirect on !isValid after validation; a locked capsule shows
+  // a "locked" screen instead of redirecting.
+  const ownerPrincipalForLock: Principal | null = (() => {
+    try {
+      return ownerPrincipalStr ? Principal.fromText(ownerPrincipalStr) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  // Poll lock status every 30s -- if owner locks while beneficiary is viewing,
+  // the content hides automatically without requiring a page refresh.
+  const { data: capsuleLocked = false } = useGetCapsuleLockStatus(
+    ownerPrincipalForLock,
+  );
+
   useEffect(() => {
     if (!validating && !isValid) {
-      toast.error("Session expired. Please sign in again.");
-      navigate({ to: "/access" });
+      // Only redirect for truly invalid sessions (bad token / expired)
+      // Lock-induced failures are handled by the capsuleLocked screen below
+      if (!capsuleLocked) {
+        toast.error("Session expired. Please sign in again.");
+        navigate({ to: "/access" });
+      }
     }
-  }, [validating, isValid, navigate]);
+  }, [validating, isValid, capsuleLocked, navigate]);
 
   const { data: notes = [], isLoading: notesLoading } =
     useGetCapsuleNotes(ownerPrincipal);
@@ -293,13 +590,83 @@ export default function BeneficiaryCapsulePage() {
     navigate({ to: "/" });
   };
 
-  if (validating || !isValid) {
+  if (validating) {
     return (
       <div className="min-h-screen bg-space flex items-center justify-center">
         <div className="text-center space-y-3">
           <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto" />
           <p className="text-sm text-muted-foreground">Verifying access...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Show locked screen if the capsule is locked (either during initial load
+  // or because the owner locked it while the beneficiary was already viewing)
+  if (capsuleLocked) {
+    return (
+      <div className="min-h-screen bg-space flex flex-col">
+        <header className="px-6 py-5 md:px-12">
+          <div className="flex items-center gap-3 max-w-lg mx-auto w-full">
+            <img
+              src="/assets/uploads/4FFBD3E5-2A6D-4DA4-B19E-16EFB7B05C9D-1.png"
+              alt="Cloud Capsule"
+              className="w-6 h-6 object-contain"
+            />
+            <span className="font-display font-semibold text-gradient-sky">
+              Cloud Capsule
+            </span>
+          </div>
+        </header>
+        <main className="flex-1 flex items-center justify-center px-6">
+          <motion.div
+            className="w-full max-w-md text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            data-ocid="capsule.locked_state"
+          >
+            <div className="capsule-card p-10 space-y-5">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto"
+                style={{ background: "oklch(0.67 0.18 230 / 0.12)" }}
+              >
+                <Lock
+                  className="w-8 h-8"
+                  style={{ color: "oklch(0.72 0.18 225)" }}
+                />
+              </div>
+              <div className="space-y-2">
+                <h1 className="font-display text-xl font-semibold text-foreground">
+                  Capsule is Locked
+                </h1>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  This capsule is not currently available. The owner has not
+                  unlocked it for access. Please check back later.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="gap-2 text-muted-foreground"
+                data-ocid="capsule.locked.button"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
+            </div>
+          </motion.div>
+        </main>
+      </div>
+    );
+  }
+
+  // If session is not valid and capsule isn't locked, we're mid-redirect
+  if (!isValid) {
+    return (
+      <div className="min-h-screen bg-space flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
       </div>
     );
   }
@@ -376,7 +743,7 @@ export default function BeneficiaryCapsulePage() {
             >
               {[
                 { value: "notes", icon: FileText, label: "Notes" },
-                { value: "media", icon: Image, label: "Photos & Videos" },
+                { value: "media", icon: ImageIcon, label: "Photos & Videos" },
                 { value: "neurons", icon: Brain, label: "ICP Guidance" },
               ].map(({ value, icon: Icon, label }) => (
                 <TabsTrigger
@@ -451,7 +818,7 @@ export default function BeneficiaryCapsulePage() {
                   className="text-center py-14"
                   data-ocid="capsule.media.empty_state"
                 >
-                  <Image className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
+                  <ImageIcon className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
                   <p className="text-muted-foreground text-sm">
                     No photos or videos shared yet.
                   </p>

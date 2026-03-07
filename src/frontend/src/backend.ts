@@ -174,6 +174,7 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCanisterId(): Promise<Principal>;
+    getCapsuleLockStatus(capsuleOwner: Principal): Promise<boolean>;
     getCapsuleMedia(capsuleOwner: Principal): Promise<Array<Media>>;
     getCapsuleNotes(capsuleOwner: Principal): Promise<Array<Note>>;
     getCycleBalance(): Promise<bigint>;
@@ -515,6 +516,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getCanisterId();
+            return result;
+        }
+    }
+    async getCapsuleLockStatus(arg0: Principal): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getCapsuleLockStatus(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getCapsuleLockStatus(arg0);
             return result;
         }
     }
