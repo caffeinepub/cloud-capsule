@@ -203,8 +203,10 @@ export default function MediaTab({ ownerPrincipal }: MediaTabProps) {
     if (!selectedFile || !title.trim()) return;
 
     try {
-      const blobId = await uploadFile(selectedFile);
       const isVideo = selectedFile.type.startsWith("video/");
+      const blobId = await uploadFile(selectedFile, {
+        compress: compress && isVideo,
+      });
       await createMedia.mutateAsync({
         title: title.trim(),
         blobId,

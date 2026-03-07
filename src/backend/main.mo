@@ -14,6 +14,8 @@ import MixinStorage "blob-storage/Mixin";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
+
+
 actor {
   // Initialize the access control system
   let accessControlState = AccessControl.initState();
@@ -94,6 +96,17 @@ actor {
     globalInstructions : Text;
   };
 
+  type AdminMetrics = {
+    totalUsers : Nat;
+    totalCapsules : Nat;
+    visitCount : Nat;
+    totalNotes : Nat;
+    totalMedia : Nat;
+    totalNeuronEntries : Nat;
+  };
+
+  var visitCount : Nat = 0;
+
   let capsules = Map.empty<Principal, Capsule>();
   let beneficiarySessions = Map.empty<Text, (Principal, Text, Time.Time)>();
   let userProfiles = Map.empty<Principal, UserProfile>();
@@ -118,6 +131,58 @@ actor {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
     userProfiles.add(caller, profile);
+  };
+
+  public shared ({ caller }) func recordVisit() : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can record visits");
+    };
+    visitCount += 1;
+  };
+
+  public query func isAdminSetup() : async Bool {
+    accessControlState.adminAssigned;
+  };
+
+  public shared ({ caller }) func setupFirstAdmin() : async () {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Must be logged in to set up admin");
+    };
+    if (accessControlState.adminAssigned) {
+      Runtime.trap("Admin already set up");
+    };
+    accessControlState.userRoles.add(caller, #admin);
+    accessControlState.adminAssigned := true;
+  };
+
+  public query ({ caller }) func getAdminMetrics() : async AdminMetrics {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Only callable by admin");
+    };
+
+    let totalCapsules = capsules.size();
+    let totalUsers = userProfiles.size();
+
+    // Calculate totalNotes, totalMedia, and totalNeuronEntries
+    var totalNotes : Nat = 0;
+    var totalMedia : Nat = 0;
+    var totalNeuronEntries : Nat = 0;
+
+    for (capsule in capsules.values()) {
+      totalNotes += capsule.notes.size();
+      totalMedia += capsule.media.size();
+      totalNeuronEntries += capsule.neuronEntries.size();
+    };
+
+    let metrics : AdminMetrics = {
+      totalUsers;
+      totalCapsules;
+      visitCount;
+      totalNotes;
+      totalMedia;
+      totalNeuronEntries;
+    };
+    metrics;
   };
 
   // Capsule Management

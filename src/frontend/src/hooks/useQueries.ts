@@ -21,7 +21,8 @@ export function useGetCallerUserProfile() {
       return actor.getCallerUserProfile();
     },
     enabled: !!actor && !actorFetching,
-    retry: false,
+    retry: 2,
+    retryDelay: 1000,
   });
 
   return {
@@ -118,7 +119,13 @@ export function useGetCapsuleNotes(capsuleOwner: Principal | null) {
     queryFn: async () => {
       if (!actor || !capsuleOwner)
         throw new Error("Actor or owner not available");
-      return actor.getCapsuleNotes(capsuleOwner);
+      try {
+        return await actor.getCapsuleNotes(capsuleOwner);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("Capsule not found")) return [];
+        throw err;
+      }
     },
     enabled: !!actor && !isFetching && !!capsuleOwner,
   });
@@ -183,7 +190,13 @@ export function useGetCapsuleMedia(capsuleOwner: Principal | null) {
     queryFn: async () => {
       if (!actor || !capsuleOwner)
         throw new Error("Actor or owner not available");
-      return actor.getCapsuleMedia(capsuleOwner);
+      try {
+        return await actor.getCapsuleMedia(capsuleOwner);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("Capsule not found")) return [];
+        throw err;
+      }
     },
     enabled: !!actor && !isFetching && !!capsuleOwner,
   });
@@ -229,8 +242,8 @@ export function useDeleteMedia() {
 
 // ── Neuron Entries ────────────────────────────────────────────────────────
 
-// NeuronEntry with optional id (the backend returns entries with ids at runtime even if not typed)
-export type NeuronEntryWithId = NeuronEntry & { id?: string };
+// NeuronEntry with id — we use neuronId as the stable key for update/delete
+export type NeuronEntryWithId = NeuronEntry & { id: string };
 
 export function useGetNeuronEntries(capsuleOwner: Principal | null) {
   const { actor, isFetching } = useActor();
@@ -240,9 +253,15 @@ export function useGetNeuronEntries(capsuleOwner: Principal | null) {
     queryFn: async () => {
       if (!actor || !capsuleOwner)
         throw new Error("Actor or owner not available");
-      return actor.getNeuronEntries(capsuleOwner) as Promise<
-        NeuronEntryWithId[]
-      >;
+      try {
+        const entries = await actor.getNeuronEntries(capsuleOwner);
+        // Use neuronId as the stable map key for update/delete operations
+        return entries.map((e) => ({ ...e, id: e.neuronId }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("Capsule not found")) return [];
+        throw err;
+      }
     },
     enabled: !!actor && !isFetching && !!capsuleOwner,
   });
@@ -256,7 +275,13 @@ export function useGetGlobalInstructions(capsuleOwner: Principal | null) {
     queryFn: async () => {
       if (!actor || !capsuleOwner)
         throw new Error("Actor or owner not available");
-      return actor.getGlobalInstructions(capsuleOwner);
+      try {
+        return await actor.getGlobalInstructions(capsuleOwner);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("Capsule not found")) return "";
+        throw err;
+      }
     },
     enabled: !!actor && !isFetching && !!capsuleOwner,
   });
@@ -318,6 +343,7 @@ export function useUpdateNeuronEntry() {
       notes: string;
     }) => {
       if (!actor) throw new Error("Actor not available");
+      // entryId is the neuronId used as the map key in the backend
       return actor.updateNeuronEntry(
         entry.entryId,
         entry.neuronId,
@@ -340,6 +366,7 @@ export function useDeleteNeuronEntry() {
   return useMutation({
     mutationFn: async (entryId: string) => {
       if (!actor) throw new Error("Actor not available");
+      // entryId is the neuronId used as the map key in the backend
       return actor.deleteNeuronEntry(entryId);
     },
     onSuccess: () => {

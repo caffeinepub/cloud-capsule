@@ -9,13 +9,98 @@ export interface UploadState {
 }
 
 /**
+ * Compress a video file client-side by re-encoding it at a lower resolution
+ * using the browser's MediaRecorder API. Falls back to original if not supported.
+ */
+async function compressVideo(file: File): Promise<File> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    video.src = url;
+    video.muted = true;
+
+    video.onloadedmetadata = () => {
+      const targetWidth = Math.min(video.videoWidth, 854); // 480p-ish width
+      const targetHeight = Math.round(
+        (video.videoHeight / video.videoWidth) * targetWidth,
+      );
+
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx || !("MediaRecorder" in window)) {
+        URL.revokeObjectURL(url);
+        resolve(file);
+        return;
+      }
+
+      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
+        ? "video/webm;codecs=vp9"
+        : MediaRecorder.isTypeSupported("video/webm")
+          ? "video/webm"
+          : null;
+
+      if (!mimeType) {
+        URL.revokeObjectURL(url);
+        resolve(file);
+        return;
+      }
+
+      const stream = canvas.captureStream(30);
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 800_000, // ~800 kbps
+      });
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        URL.revokeObjectURL(url);
+        const compressed = new Blob(chunks, { type: mimeType });
+        // Only use compressed if it's actually smaller
+        const result =
+          compressed.size < file.size
+            ? new File([compressed], file.name.replace(/\.[^.]+$/, ".webm"), {
+                type: mimeType,
+              })
+            : file;
+        resolve(result);
+      };
+
+      video.onplay = () => {
+        recorder.start();
+        const drawFrame = () => {
+          if (video.paused || video.ended) {
+            recorder.stop();
+            return;
+          }
+          ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+          requestAnimationFrame(drawFrame);
+        };
+        drawFrame();
+      };
+
+      video.play().catch(() => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      });
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+  });
+}
+
+/**
  * Hook for uploading files via blob storage.
  * Returns the blobId (hash string) which can be passed to createMedia.
- *
- * We use the actor's internal _uploadFile by wrapping ExternalBlob.fromBytes
- * and calling it through the config-created uploadFile function.
- * Since we can't directly access the upload function, we use a workaround:
- * We create the media via the actor which handles the blob internally.
  */
 export function useBlobUpload() {
   const { actor } = useActor();
@@ -28,29 +113,38 @@ export function useBlobUpload() {
 
   /**
    * Upload a file and return the blobId.
-   * The actor's internal uploadFile handles the blob storage upload.
-   * We use ExternalBlob.fromBytes to prepare the blob.
+   * Pass compress=true for videos to apply client-side compression before upload.
    */
   const uploadFile = useCallback(
-    async (file: File, onProgress?: (pct: number) => void): Promise<string> => {
+    async (
+      file: File,
+      options?: { compress?: boolean; onProgress?: (pct: number) => void },
+    ): Promise<string> => {
       if (!actor) throw new Error("Actor not available");
 
       setState({ isUploading: true, progress: 0, error: null });
 
       try {
-        const arrayBuffer = await file.arrayBuffer();
+        // Apply video compression if requested
+        let fileToUpload = file;
+        if (options?.compress && file.type.startsWith("video/")) {
+          setState((prev) => ({ ...prev, progress: 5 }));
+          fileToUpload = await compressVideo(file);
+        }
+
+        const arrayBuffer = await fileToUpload.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
 
         let blob = ExternalBlob.fromBytes(bytes);
-        if (onProgress) {
-          blob = blob.withUploadProgress((percentage) => {
-            setState((prev) => ({ ...prev, progress: percentage }));
-            onProgress(percentage);
-          });
-        }
+        blob = blob.withUploadProgress((percentage) => {
+          // Map upload progress to 10-100% range (first 10% reserved for compression)
+          const adjusted = options?.compress
+            ? Math.round(10 + (percentage * 90) / 100)
+            : percentage;
+          setState((prev) => ({ ...prev, progress: adjusted }));
+          options?.onProgress?.(adjusted);
+        });
 
-        // Use the actor's internal upload function (accessed via the actor wrapper)
-        // The actor wrapper exposes _uploadFile as part of its class
         const internalActor = actor as unknown as {
           _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>;
         };

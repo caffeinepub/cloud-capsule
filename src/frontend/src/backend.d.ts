@@ -22,6 +22,14 @@ export interface Beneficiary {
     hashedPassword: string;
 }
 export type Time = bigint;
+export interface AdminMetrics {
+    totalMedia: bigint;
+    visitCount: bigint;
+    totalCapsules: bigint;
+    totalNotes: bigint;
+    totalUsers: bigint;
+    totalNeuronEntries: bigint;
+}
 export interface Media {
     id: string;
     title: string;
@@ -61,6 +69,7 @@ export interface backendInterface {
     deleteMedia(mediaId: string): Promise<void>;
     deleteNeuronEntry(entryId: string): Promise<void>;
     deleteNote(noteId: string): Promise<void>;
+    getAdminMetrics(): Promise<AdminMetrics>;
     getBeneficiaries(): Promise<Array<Beneficiary>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
@@ -71,11 +80,14 @@ export interface backendInterface {
     getGlobalInstructions(capsuleOwner: Principal): Promise<string>;
     getNeuronEntries(capsuleOwner: Principal): Promise<Array<NeuronEntry>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
+    isAdminSetup(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
     isLoggedInToBeneficiarySession(token: string): Promise<boolean>;
+    recordVisit(): Promise<void>;
     removeBeneficiary(username: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setGlobalInstructions(instructions: string): Promise<void>;
+    setupFirstAdmin(): Promise<void>;
     toggleCapsuleLock(): Promise<void>;
     updateNeuronEntry(entryId: string, neuronId: string, dissolveDate: string, designatedController: string, votingPreferences: string, notes: string): Promise<void>;
     updateNote(noteId: string, title: string, body: string): Promise<void>;

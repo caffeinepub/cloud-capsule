@@ -10,6 +10,8 @@ import {
   Lock,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useEffect } from "react";
+import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 export default function LandingPage() {
@@ -17,6 +19,16 @@ export default function LandingPage() {
   const { login, clear, identity, isInitializing, isLoggingIn } =
     useInternetIdentity();
   const queryClient = useQueryClient();
+  const { actor } = useActor();
+
+  // Fire-and-forget visit recording
+  useEffect(() => {
+    if (actor) {
+      actor.recordVisit().catch(() => {
+        // Intentionally ignore errors — this is analytics-only
+      });
+    }
+  }, [actor]);
   const isAuthenticated = !!identity;
 
   const handleCreateCapsule = async () => {
@@ -138,6 +150,41 @@ export default function LandingPage() {
             <span className="text-gradient-sky">Cloud Capsule</span>
           </span>
         </div>
+
+        {/* Nav links — hidden on mobile, visible md+ */}
+        <nav className="hidden md:flex items-center gap-1 mr-2">
+          <button
+            type="button"
+            onClick={handleCreateCapsule}
+            disabled={isLoggingIn || isInitializing}
+            data-ocid="nav.create_capsule_button"
+            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ color: "oklch(0.72 0.14 220)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "oklch(0.85 0.14 220)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "oklch(0.72 0.14 220)";
+            }}
+          >
+            {isAuthenticated ? "My Capsule" : "Open My Capsule"}
+          </button>
+          <button
+            type="button"
+            onClick={handleAccessCapsule}
+            data-ocid="nav.access_capsule_button"
+            className="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200"
+            style={{ color: "oklch(0.72 0.14 220)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "oklch(0.85 0.14 220)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "oklch(0.72 0.14 220)";
+            }}
+          >
+            Access a Capsule
+          </button>
+        </nav>
 
         <div className="flex items-center gap-3">
           {!isInitializing &&
@@ -261,38 +308,6 @@ export default function LandingPage() {
               leave messages, and share your ICP inheritance wishes — all
               secured on the Internet Computer.
             </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-              <Button
-                size="lg"
-                onClick={handleCreateCapsule}
-                disabled={isLoggingIn || isInitializing}
-                data-ocid="landing.create_capsule_button"
-                className="w-full sm:w-auto gap-2 text-base px-8 py-6 rounded-xl border-0 font-semibold glow-sky bg-gradient-sky text-white hover:opacity-90 transition-all duration-200"
-              >
-                {isLoggingIn
-                  ? "Connecting..."
-                  : isAuthenticated
-                    ? "Open My Capsule"
-                    : "Create My Capsule"}
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={handleAccessCapsule}
-                data-ocid="landing.access_capsule_button"
-                className="w-full sm:w-auto gap-2 text-base px-8 py-6 rounded-xl border-2 font-semibold transition-all duration-200 hover:bg-white/5"
-                style={{
-                  borderColor: "oklch(0.42 0.12 265)",
-                  color: "oklch(0.78 0.1 240)",
-                }}
-              >
-                <Lock className="w-4 h-4" />
-                Access a Capsule
-              </Button>
-            </div>
           </motion.div>
 
           {/* Hero image */}
@@ -323,8 +338,130 @@ export default function LandingPage() {
           </motion.div>
         </section>
 
+        {/* Privacy Trust Section — beneath the lockbox image */}
+        <section className="px-6 pt-16 pb-8 md:px-12">
+          <div className="max-w-3xl mx-auto text-center space-y-8">
+            {/* App intro */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.6 }}
+              className="space-y-4"
+            >
+              <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground">
+                What is{" "}
+                <span className="text-gradient-sky">Cloud Capsule?</span>
+              </h2>
+              <p className="text-base md:text-lg text-muted-foreground leading-relaxed">
+                Cloud Capsule is a digital legacy platform built on the Internet
+                Computer. It gives you a private, permanent space to store
+                memories, personal messages, and critical instructions for the
+                people you love — to be discovered when the time comes. Think of
+                it as a safety deposit box for everything that matters: photos,
+                videos, heartfelt notes, and clear guidance on your ICP neurons
+                and digital assets. Unlike traditional cloud storage, nothing
+                here passes through a company's servers. Your capsule lives
+                entirely on-chain, under your control, forever.
+              </p>
+            </motion.div>
+
+            {/* Privacy emphasis block */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.6, delay: 0.15 }}
+              className="relative rounded-2xl p-7 text-left"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.18 0.06 265 / 0.85), oklch(0.15 0.05 285 / 0.9))",
+                border: "1px solid oklch(0.67 0.18 230 / 0.3)",
+                boxShadow:
+                  "0 0 40px oklch(0.55 0.2 250 / 0.12), inset 0 0 0 1px oklch(0.67 0.18 230 / 0.08)",
+              }}
+            >
+              {/* Top accent line */}
+              <div
+                className="absolute top-0 left-8 right-8 h-px rounded-full"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent, oklch(0.67 0.18 230 / 0.6), oklch(0.65 0.2 285 / 0.5), transparent)",
+                }}
+              />
+
+              <div className="flex items-start gap-4 mb-5">
+                <div
+                  className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center mt-0.5"
+                  style={{
+                    background: "oklch(0.55 0.22 230 / 0.2)",
+                    border: "1px solid oklch(0.67 0.18 230 / 0.35)",
+                  }}
+                >
+                  <Lock
+                    className="w-5 h-5"
+                    style={{ color: "oklch(0.78 0.16 220)" }}
+                  />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-foreground mb-1">
+                    Your Data Belongs to You — Only You
+                  </h3>
+                  <p
+                    className="text-sm font-medium"
+                    style={{ color: "oklch(0.72 0.14 230)" }}
+                  >
+                    Completely private. Fully sovereign. Unhackable by design.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4 text-sm md:text-base text-muted-foreground leading-relaxed">
+                <p>
+                  Every Cloud Capsule is stored inside its{" "}
+                  <span className="text-foreground font-semibold">
+                    own dedicated canister
+                  </span>{" "}
+                  — a self-contained smart contract that you personally own on
+                  the Internet Computer blockchain. This is not shared hosting.
+                  No one else's data lives alongside yours. Not another user's,
+                  not ours.
+                </p>
+                <p>
+                  Because your canister is a sovereign piece of on-chain
+                  infrastructure, it is{" "}
+                  <span className="text-foreground font-semibold">
+                    cryptographically inaccessible
+                  </span>{" "}
+                  to anyone without your permission — including the Cloud
+                  Capsule team. There is no backdoor, no admin override, and no
+                  way to compel access. Even if someone wanted to, the
+                  architecture of the Internet Computer makes it technically
+                  impossible to breach your canister without your private keys.
+                </p>
+                <p>
+                  To keep your capsule alive and running, you fund it directly.
+                  Inside the app, your{" "}
+                  <span className="text-foreground font-semibold">
+                    unique canister ID
+                  </span>{" "}
+                  is displayed in your Settings tab. You send ICP to that
+                  canister ID, which is converted into cycles — the fuel that
+                  powers computation and storage on the Internet Computer. Since
+                  a Cloud Capsule sees very little traffic, a modest ICP deposit
+                  can keep your capsule running for{" "}
+                  <span className="text-foreground font-semibold">
+                    years, even decades
+                  </span>
+                  .
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
         {/* Features */}
-        <section className="px-6 pb-20 md:px-12">
+        <section className="px-6 pb-20 pt-10 md:px-12">
           <div className="max-w-5xl mx-auto">
             <motion.div
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
@@ -373,6 +510,88 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
+
+      {/* Bottom CTA Section */}
+      <motion.section
+        className="relative z-10 px-6 py-20 md:px-12"
+        initial={{ opacity: 0, y: 32 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-80px" }}
+        transition={{ duration: 0.7 }}
+      >
+        <div className="max-w-2xl mx-auto text-center space-y-6">
+          {/* Decorative glow */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 w-[500px] h-[200px] rounded-full blur-3xl pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(ellipse, oklch(0.55 0.2 250 / 0.15), transparent 70%)",
+            }}
+          />
+
+          <motion.h2
+            className="font-display text-4xl md:text-5xl font-bold leading-tight relative"
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            <span className="text-foreground">Your legacy deserves</span>
+            <br />
+            <span className="text-gradient-sky italic font-serif">
+              to last forever.
+            </span>
+          </motion.h2>
+
+          <motion.p
+            className="text-lg text-muted-foreground leading-relaxed"
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+          >
+            Start your capsule today or access one left for you.
+          </motion.p>
+
+          <motion.div
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2"
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+          >
+            <Button
+              size="lg"
+              onClick={handleCreateCapsule}
+              disabled={isLoggingIn || isInitializing}
+              data-ocid="landing.create_capsule_button"
+              className="w-full sm:w-auto gap-2 text-base px-8 py-6 rounded-xl border-0 font-semibold glow-sky bg-gradient-sky text-white hover:opacity-90 transition-all duration-200"
+            >
+              {isLoggingIn
+                ? "Connecting..."
+                : isAuthenticated
+                  ? "Open My Capsule"
+                  : "Create My Capsule"}
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={handleAccessCapsule}
+              data-ocid="landing.access_capsule_button"
+              className="w-full sm:w-auto gap-2 text-base px-8 py-6 rounded-xl border-2 font-semibold transition-all duration-200 hover:bg-white/5"
+              style={{
+                borderColor: "oklch(0.42 0.12 265)",
+                color: "oklch(0.78 0.1 240)",
+              }}
+            >
+              <Lock className="w-4 h-4" />
+              Access a Capsule
+            </Button>
+          </motion.div>
+        </div>
+      </motion.section>
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-border/50 py-6 px-6 md:px-12">

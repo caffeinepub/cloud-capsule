@@ -108,6 +108,14 @@ export interface Beneficiary {
     hashedPassword: string;
 }
 export type Time = bigint;
+export interface AdminMetrics {
+    totalMedia: bigint;
+    visitCount: bigint;
+    totalCapsules: bigint;
+    totalNotes: bigint;
+    totalUsers: bigint;
+    totalNeuronEntries: bigint;
+}
 export interface _CaffeineStorageRefillInformation {
     proposed_top_up_amount?: bigint;
 }
@@ -161,6 +169,7 @@ export interface backendInterface {
     deleteMedia(mediaId: string): Promise<void>;
     deleteNeuronEntry(entryId: string): Promise<void>;
     deleteNote(noteId: string): Promise<void>;
+    getAdminMetrics(): Promise<AdminMetrics>;
     getBeneficiaries(): Promise<Array<Beneficiary>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
@@ -171,11 +180,14 @@ export interface backendInterface {
     getGlobalInstructions(capsuleOwner: Principal): Promise<string>;
     getNeuronEntries(capsuleOwner: Principal): Promise<Array<NeuronEntry>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
+    isAdminSetup(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
     isLoggedInToBeneficiarySession(token: string): Promise<boolean>;
+    recordVisit(): Promise<void>;
     removeBeneficiary(username: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setGlobalInstructions(instructions: string): Promise<void>;
+    setupFirstAdmin(): Promise<void>;
     toggleCapsuleLock(): Promise<void>;
     updateNeuronEntry(entryId: string, neuronId: string, dissolveDate: string, designatedController: string, votingPreferences: string, notes: string): Promise<void>;
     updateNote(noteId: string, title: string, body: string): Promise<void>;
@@ -436,6 +448,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async getAdminMetrics(): Promise<AdminMetrics> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAdminMetrics();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAdminMetrics();
+            return result;
+        }
+    }
     async getBeneficiaries(): Promise<Array<Beneficiary>> {
         if (this.processError) {
             try {
@@ -576,6 +602,20 @@ export class Backend implements backendInterface {
             return from_candid_opt_n12(this._uploadFile, this._downloadFile, result);
         }
     }
+    async isAdminSetup(): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.isAdminSetup();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.isAdminSetup();
+            return result;
+        }
+    }
     async isCallerAdmin(): Promise<boolean> {
         if (this.processError) {
             try {
@@ -601,6 +641,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.isLoggedInToBeneficiarySession(arg0);
+            return result;
+        }
+    }
+    async recordVisit(): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.recordVisit();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.recordVisit();
             return result;
         }
     }
@@ -643,6 +697,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.setGlobalInstructions(arg0);
+            return result;
+        }
+    }
+    async setupFirstAdmin(): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.setupFirstAdmin();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.setupFirstAdmin();
             return result;
         }
     }

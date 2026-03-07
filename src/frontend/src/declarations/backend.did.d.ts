@@ -10,6 +10,14 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface AdminMetrics {
+  'totalMedia' : bigint,
+  'visitCount' : bigint,
+  'totalCapsules' : bigint,
+  'totalNotes' : bigint,
+  'totalUsers' : bigint,
+  'totalNeuronEntries' : bigint,
+}
 export interface Beneficiary {
   'id' : string,
   'username' : string,
@@ -87,6 +95,7 @@ export interface _SERVICE {
   'deleteMedia' : ActorMethod<[string], undefined>,
   'deleteNeuronEntry' : ActorMethod<[string], undefined>,
   'deleteNote' : ActorMethod<[string], undefined>,
+  'getAdminMetrics' : ActorMethod<[], AdminMetrics>,
   'getBeneficiaries' : ActorMethod<[], Array<Beneficiary>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
@@ -97,11 +106,14 @@ export interface _SERVICE {
   'getGlobalInstructions' : ActorMethod<[Principal], string>,
   'getNeuronEntries' : ActorMethod<[Principal], Array<NeuronEntry>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'isAdminSetup' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isLoggedInToBeneficiarySession' : ActorMethod<[string], boolean>,
+  'recordVisit' : ActorMethod<[], undefined>,
   'removeBeneficiary' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'setGlobalInstructions' : ActorMethod<[string], undefined>,
+  'setupFirstAdmin' : ActorMethod<[], undefined>,
   'toggleCapsuleLock' : ActorMethod<[], undefined>,
   'updateNeuronEntry' : ActorMethod<
     [string, string, string, string, string, string],

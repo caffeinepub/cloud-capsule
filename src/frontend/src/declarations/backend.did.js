@@ -28,6 +28,14 @@ export const MediaType = IDL.Variant({
   'video' : IDL.Null,
   'photo' : IDL.Null,
 });
+export const AdminMetrics = IDL.Record({
+  'totalMedia' : IDL.Nat,
+  'visitCount' : IDL.Nat,
+  'totalCapsules' : IDL.Nat,
+  'totalNotes' : IDL.Nat,
+  'totalUsers' : IDL.Nat,
+  'totalNeuronEntries' : IDL.Nat,
+});
 export const Time = IDL.Int;
 export const Beneficiary = IDL.Record({
   'id' : IDL.Text,
@@ -109,6 +117,7 @@ export const idlService = IDL.Service({
   'deleteMedia' : IDL.Func([IDL.Text], [], []),
   'deleteNeuronEntry' : IDL.Func([IDL.Text], [], []),
   'deleteNote' : IDL.Func([IDL.Text], [], []),
+  'getAdminMetrics' : IDL.Func([], [AdminMetrics], ['query']),
   'getBeneficiaries' : IDL.Func([], [IDL.Vec(Beneficiary)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -127,15 +136,18 @@ export const idlService = IDL.Service({
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
+  'isAdminSetup' : IDL.Func([], [IDL.Bool], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isLoggedInToBeneficiarySession' : IDL.Func(
       [IDL.Text],
       [IDL.Bool],
       ['query'],
     ),
+  'recordVisit' : IDL.Func([], [], []),
   'removeBeneficiary' : IDL.Func([IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'setGlobalInstructions' : IDL.Func([IDL.Text], [], []),
+  'setupFirstAdmin' : IDL.Func([], [], []),
   'toggleCapsuleLock' : IDL.Func([], [], []),
   'updateNeuronEntry' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],
@@ -170,6 +182,14 @@ export const idlFactory = ({ IDL }) => {
     'guest' : IDL.Null,
   });
   const MediaType = IDL.Variant({ 'video' : IDL.Null, 'photo' : IDL.Null });
+  const AdminMetrics = IDL.Record({
+    'totalMedia' : IDL.Nat,
+    'visitCount' : IDL.Nat,
+    'totalCapsules' : IDL.Nat,
+    'totalNotes' : IDL.Nat,
+    'totalUsers' : IDL.Nat,
+    'totalNeuronEntries' : IDL.Nat,
+  });
   const Time = IDL.Int;
   const Beneficiary = IDL.Record({
     'id' : IDL.Text,
@@ -251,6 +271,7 @@ export const idlFactory = ({ IDL }) => {
     'deleteMedia' : IDL.Func([IDL.Text], [], []),
     'deleteNeuronEntry' : IDL.Func([IDL.Text], [], []),
     'deleteNote' : IDL.Func([IDL.Text], [], []),
+    'getAdminMetrics' : IDL.Func([], [AdminMetrics], ['query']),
     'getBeneficiaries' : IDL.Func([], [IDL.Vec(Beneficiary)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
@@ -269,15 +290,18 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
+    'isAdminSetup' : IDL.Func([], [IDL.Bool], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isLoggedInToBeneficiarySession' : IDL.Func(
         [IDL.Text],
         [IDL.Bool],
         ['query'],
       ),
+    'recordVisit' : IDL.Func([], [], []),
     'removeBeneficiary' : IDL.Func([IDL.Text], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'setGlobalInstructions' : IDL.Func([IDL.Text], [], []),
+    'setupFirstAdmin' : IDL.Func([], [], []),
     'toggleCapsuleLock' : IDL.Func([], [], []),
     'updateNeuronEntry' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Text],

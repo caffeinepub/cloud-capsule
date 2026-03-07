@@ -42,6 +42,7 @@ export default function DashboardPage() {
     data: userProfile,
     isLoading: profileLoading,
     isFetched: profileFetched,
+    isError: profileError,
   } = useGetCallerUserProfile();
   const saveProfile = useSaveCallerUserProfile();
   const createCapsule = useCreateCapsule();
@@ -54,11 +55,15 @@ export default function DashboardPage() {
     }
   }, [isInitializing, isAuthenticated, navigate]);
 
+  // Show onboarding when: profile loaded and is null (new user), OR profile query errored
+  // (which can happen if actor init races; treat it as needing setup)
   const showOnboarding =
     isAuthenticated &&
     !profileLoading &&
-    profileFetched &&
-    userProfile === null;
+    ((profileFetched && userProfile === null) || profileError);
+
+  // Only render tab content once the capsule exists (profile has been saved)
+  const capsuleReady = !!userProfile && !showOnboarding;
 
   const ownerPrincipal: Principal | null = identity
     ? (identity.getPrincipal() as unknown as Principal)
@@ -211,19 +216,25 @@ export default function DashboardPage() {
           </div>
 
           <TabsContent value="notes" className="mt-0">
-            {ownerPrincipal && <NotesTab ownerPrincipal={ownerPrincipal} />}
+            {capsuleReady && ownerPrincipal && (
+              <NotesTab ownerPrincipal={ownerPrincipal} />
+            )}
           </TabsContent>
 
           <TabsContent value="media" className="mt-0">
-            {ownerPrincipal && <MediaTab ownerPrincipal={ownerPrincipal} />}
+            {capsuleReady && ownerPrincipal && (
+              <MediaTab ownerPrincipal={ownerPrincipal} />
+            )}
           </TabsContent>
 
           <TabsContent value="neurons" className="mt-0">
-            {ownerPrincipal && <NeuronsTab ownerPrincipal={ownerPrincipal} />}
+            {capsuleReady && ownerPrincipal && (
+              <NeuronsTab ownerPrincipal={ownerPrincipal} />
+            )}
           </TabsContent>
 
           <TabsContent value="beneficiaries" className="mt-0">
-            <BeneficiariesTab />
+            {capsuleReady && <BeneficiariesTab />}
           </TabsContent>
 
           <TabsContent value="settings" className="mt-0">

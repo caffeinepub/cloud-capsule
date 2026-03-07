@@ -1,4 +1,5 @@
 import { createRootRoute, createRoute } from "@tanstack/react-router";
+import AdminPage from "../pages/AdminPage";
 import BeneficiaryCapsulePage from "../pages/BeneficiaryCapsulePage";
 import BeneficiaryLoginPage from "../pages/BeneficiaryLoginPage";
 import DashboardPage from "../pages/DashboardPage";
@@ -33,9 +34,16 @@ const capsuleRoute = createRoute({
   component: BeneficiaryCapsulePage,
 });
 
+const adminRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin",
+  component: AdminPage,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   dashboardRoute,
   accessRoute,
   capsuleRoute,
+  adminRoute,
 ]);
