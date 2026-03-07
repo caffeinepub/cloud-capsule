@@ -246,10 +246,31 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
 
   // ── Fetch canister ID & derive account identifier ──
   const fetchDepositAddress = useCallback(async () => {
-    if (!actor) return;
     try {
-      const principalResult = await actor.getCanisterId();
-      const principalObj = Principal.fromText(principalResult.toString());
+      // Read canister ID from env.json (served as a static asset, injected at deploy time)
+      let principalText = "";
+      try {
+        const resp = await fetch("/env.json");
+        if (resp.ok) {
+          const config = await resp.json();
+          const id: string | undefined = config?.backend_canister_id;
+          if (id && id !== "undefined" && id.trim().length > 0) {
+            principalText = id.trim();
+          }
+        }
+      } catch {
+        // ignore and try build-time env
+      }
+      if (!principalText) {
+        const envId =
+          (process.env.CANISTER_ID_BACKEND as string | undefined) ?? "";
+        if (envId && envId !== "undefined") principalText = envId;
+      }
+      if (!principalText) {
+        setAddressError("fallback");
+        return;
+      }
+      const principalObj = Principal.fromText(principalText);
       setCanisterPrincipal(principalObj.toText());
       const accountId = await principalToAccountId(principalObj);
       setDepositAddress(accountId);
@@ -257,13 +278,11 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
     } catch {
       setAddressError("fallback");
     }
-  }, [actor]);
+  }, []);
 
   useEffect(() => {
-    if (actor && !actorFetching) {
-      fetchDepositAddress();
-    }
-  }, [actor, actorFetching, fetchDepositAddress]);
+    fetchDepositAddress();
+  }, [fetchDepositAddress]);
 
   // ── Warning: cycles below threshold ──
   const isLowCycles =

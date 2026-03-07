@@ -129,14 +129,27 @@ export function useGetCanisterId() {
   return useQuery<string>({
     queryKey: ["canisterId"],
     queryFn: async () => {
-      // The canister ID is injected at build time via CANISTER_ID_BACKEND.
-      // The backend getCanisterId() method is not yet implemented, so we read
-      // it directly from the environment variable instead.
+      // 1. Try fetching from env.json (served as static asset, injected at deploy time)
+      try {
+        const resp = await fetch("/env.json");
+        if (resp.ok) {
+          const config = await resp.json();
+          const id: string | undefined = config?.backend_canister_id;
+          if (id && id !== "undefined" && id.trim().length > 0) {
+            return id.trim();
+          }
+        }
+      } catch {
+        // fall through
+      }
+      // 2. Fallback: build-time env variable (local dev)
       const id = (process.env.CANISTER_ID_BACKEND as string | undefined) ?? "";
-      if (!id) throw new Error("Canister ID not available");
-      return id;
+      if (id && id !== "undefined") return id;
+      throw new Error("Canister ID not available");
     },
     staleTime: Number.POSITIVE_INFINITY,
+    retry: 3,
+    retryDelay: 1500,
   });
 }
 
