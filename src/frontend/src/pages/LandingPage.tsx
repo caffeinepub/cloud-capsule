@@ -74,7 +74,7 @@ export default function LandingPage() {
     {
       icon: FileText,
       title: "Secure & Private",
-      desc: "Your own dedicated canister on the Internet Computer. Your data, your control.",
+      desc: "Your data is stored on the Internet Computer blockchain — private by design, protected by cryptography.",
       hue: 215,
     },
   ];
@@ -360,9 +360,10 @@ export default function LandingPage() {
                 people you love — to be discovered when the time comes. Think of
                 it as a safety deposit box for everything that matters: photos,
                 videos, heartfelt notes, and clear guidance on your ICP neurons
-                and digital assets. Unlike traditional cloud storage, nothing
-                here passes through a company's servers. Your capsule lives
-                entirely on-chain, under your control, forever.
+                and digital assets. Unlike traditional cloud storage, your data
+                lives entirely on-chain — secured by the cryptographic
+                guarantees of the Internet Computer, not by trusting a company's
+                servers.
               </p>
             </motion.div>
 
@@ -418,40 +419,34 @@ export default function LandingPage() {
 
               <div className="space-y-4 text-sm md:text-base text-muted-foreground leading-relaxed">
                 <p>
-                  Every Cloud Capsule is stored inside its{" "}
+                  Cloud Capsule runs on the{" "}
                   <span className="text-foreground font-semibold">
-                    own dedicated canister
+                    Internet Computer blockchain
                   </span>{" "}
-                  — a self-contained smart contract that you personally own on
-                  the Internet Computer blockchain. This is not shared hosting.
-                  No one else's data lives alongside yours. Not another user's,
-                  not ours.
+                  — a decentralized network of compute nodes that stores and
+                  executes your data without relying on any traditional cloud
+                  provider. There is no AWS, no Google Cloud, no centralized
+                  server that can be seized, hacked, or shut down.
                 </p>
                 <p>
-                  Because your canister is a sovereign piece of on-chain
-                  infrastructure, it is{" "}
+                  Your capsule content is{" "}
                   <span className="text-foreground font-semibold">
-                    cryptographically inaccessible
+                    access-controlled by your identity
                   </span>{" "}
-                  to anyone without your permission — including the Cloud
-                  Capsule team. There is no backdoor, no admin override, and no
-                  way to compel access. Even if someone wanted to, the
-                  architecture of the Internet Computer makes it technically
-                  impossible to breach your canister without your private keys.
+                  — only you and the beneficiaries you explicitly authorize can
+                  ever view it. The Cloud Capsule team has no ability to read,
+                  copy, or hand over your private content. Access control is
+                  enforced at the code level by the Internet Computer's
+                  cryptographic security model, not by a password policy or
+                  privacy promise.
                 </p>
                 <p>
-                  To keep your capsule alive and running, you fund it directly.
-                  Inside the app, your{" "}
+                  Infrastructure and cycle costs are handled automatically so
+                  you never have to think about them. Since a Cloud Capsule sees
+                  very little traffic, the on-chain storage cost is minimal —
+                  and your capsule is designed to{" "}
                   <span className="text-foreground font-semibold">
-                    unique canister ID
-                  </span>{" "}
-                  is displayed in your Settings tab. You send ICP to that
-                  canister ID, which is converted into cycles — the fuel that
-                  powers computation and storage on the Internet Computer. Since
-                  a Cloud Capsule sees very little traffic, a modest ICP deposit
-                  can keep your capsule running for{" "}
-                  <span className="text-foreground font-semibold">
-                    years, even decades
+                    outlast you
                   </span>
                   .
                 </p>

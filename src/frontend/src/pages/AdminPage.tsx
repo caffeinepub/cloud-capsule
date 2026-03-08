@@ -1,13 +1,4 @@
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Principal } from "@dfinity/principal";
@@ -41,57 +32,6 @@ import type { AdminMetrics } from "../backend.d";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { formatCycleBalance } from "../utils/crypto";
-
-// ── CRC32 + AccountIdentifier derivation ────────────────────────────────
-function makeCrc32Table(): number[] {
-  const table: number[] = [];
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) {
-      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    }
-    table.push(c);
-  }
-  return table;
-}
-
-const CRC32_TABLE = makeCrc32Table();
-
-function crc32(bytes: Uint8Array): number {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ byte) & 0xff];
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-async function principalToAccountId(principal: Principal): Promise<string> {
-  const domainSep = new TextEncoder().encode("\x0Aaccount-id");
-  const principalBytes = principal.toUint8Array();
-  const subaccount = new Uint8Array(32);
-
-  const data = new Uint8Array(
-    domainSep.length + principalBytes.length + subaccount.length,
-  );
-  data.set(domainSep, 0);
-  data.set(principalBytes, domainSep.length);
-  data.set(subaccount, domainSep.length + principalBytes.length);
-
-  const hashBuffer = await crypto.subtle.digest("SHA-224", data);
-  const hashBytes = new Uint8Array(hashBuffer);
-
-  const crcVal = crc32(hashBytes);
-  const crcBytes = new Uint8Array(4);
-  new DataView(crcBytes.buffer).setUint32(0, crcVal, false);
-
-  const result = new Uint8Array(32);
-  result.set(crcBytes, 0);
-  result.set(hashBytes, 4);
-
-  return Array.from(result)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 // ── Constants ───────────────────────────────────────────────────────────
 const DEFAULT_THRESHOLD = 1_000_000_000_000n; // 1T cycles
@@ -218,13 +158,7 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
   );
   const [thresholdSaved, setThresholdSaved] = useState(false);
 
-  const [depositAddress, setDepositAddress] = useState<string>("");
   const [canisterPrincipal, setCanisterPrincipal] = useState<string>("");
-  const [addressError, setAddressError] = useState<string>("");
-  const [addressCopied, setAddresscopied] = useState(false);
-
-  const [icpAmount, setIcpAmount] = useState<string>("1");
-  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
 
   // ── Cycle balance query ──
   const {
@@ -244,10 +178,9 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
     staleTime: 30_000,
   });
 
-  // ── Fetch canister ID & derive account identifier ──
+  // ── Fetch canister ID ──
   const fetchDepositAddress = useCallback(async () => {
     try {
-      // Read canister ID from env.json (served as a static asset, injected at deploy time)
       let principalText = "";
       try {
         const resp = await fetch("/env.json");
@@ -266,17 +199,11 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
           (process.env.CANISTER_ID_BACKEND as string | undefined) ?? "";
         if (envId && envId !== "undefined") principalText = envId;
       }
-      if (!principalText) {
-        setAddressError("fallback");
-        return;
-      }
+      if (!principalText) return;
       const principalObj = Principal.fromText(principalText);
       setCanisterPrincipal(principalObj.toText());
-      const accountId = await principalToAccountId(principalObj);
-      setDepositAddress(accountId);
-      setAddressError("");
     } catch {
-      setAddressError("fallback");
+      // ignore
     }
   }, []);
 
@@ -297,17 +224,6 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
       saveThreshold(newThreshold);
       setThresholdSaved(true);
       setTimeout(() => setThresholdSaved(false), 2000);
-    }
-  };
-
-  // ── Copy deposit address ──
-  const handleCopyAddress = () => {
-    const toCopy =
-      addressError === "fallback" ? canisterPrincipal : depositAddress;
-    if (toCopy) {
-      navigator.clipboard.writeText(toCopy);
-      setAddresscopied(true);
-      setTimeout(() => setAddresscopied(false), 2000);
     }
   };
 
@@ -684,9 +600,9 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
         </motion.div>
       </div>
 
-      {/* ── Deposit Address + Convert Card ── */}
+      {/* ── How to Top Up Card ── */}
       <motion.div
-        data-ocid="admin.deposit_address_card"
+        data-ocid="admin.topup_info_card"
         className="mt-4 rounded-2xl p-6 relative overflow-hidden"
         style={{
           background:
@@ -707,332 +623,117 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
           }}
         />
 
-        <div className="flex flex-col md:flex-row md:items-start gap-6">
-          {/* Deposit Address */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield
-                className="w-4 h-4"
-                style={{ color: "oklch(0.72 0.16 230)" }}
-              />
-              <h3
-                className="font-display text-sm font-semibold"
-                style={{ color: "oklch(0.75 0.14 225)" }}
+        <div className="flex items-center gap-2 mb-3">
+          <Shield
+            className="w-4 h-4"
+            style={{ color: "oklch(0.72 0.16 230)" }}
+          />
+          <h3
+            className="font-display text-sm font-semibold"
+            style={{ color: "oklch(0.75 0.14 225)" }}
+          >
+            How to Top Up Cycles
+          </h3>
+        </div>
+
+        <div
+          className="rounded-xl p-4 mb-4 flex items-start gap-3"
+          style={{
+            background: "oklch(0.75 0.18 85 / 0.07)",
+            border: "1px solid oklch(0.75 0.18 85 / 0.25)",
+          }}
+        >
+          <AlertTriangle
+            className="w-4 h-4 flex-shrink-0 mt-0.5"
+            style={{ color: "oklch(0.75 0.18 85)" }}
+          />
+          <p
+            className="text-xs leading-relaxed"
+            style={{ color: "oklch(0.82 0.10 85)" }}
+          >
+            <span className="font-semibold">Note:</span> Caffeine manages
+            canister controllers on your behalf. This means you cannot top up
+            cycles directly via the NNS app as the canister controller. Use one
+            of the options below instead.
+          </p>
+        </div>
+
+        <div
+          className="space-y-3 text-sm"
+          style={{ color: "oklch(0.68 0.04 255)" }}
+        >
+          <div className="flex gap-3">
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold"
+              style={{
+                background: "oklch(0.55 0.22 230 / 0.2)",
+                border: "1px solid oklch(0.67 0.18 230 / 0.4)",
+                color: "oklch(0.75 0.16 225)",
+              }}
+            >
+              1
+            </div>
+            <div>
+              <p
+                className="font-semibold mb-0.5"
+                style={{ color: "oklch(0.82 0.08 255)" }}
               >
-                ICP Deposit Address
-              </h3>
-            </div>
-
-            <p
-              className="text-xs mb-3"
-              style={{ color: "oklch(0.60 0.04 255)" }}
-            >
-              Send ICP from your NNS or Plug wallet to this address. Once
-              received, use the "Convert to Cycles" button to top up your
-              canister.
-            </p>
-
-            {/* Address display */}
-            <div
-              className="rounded-xl p-3 mb-3"
-              style={{
-                background: "oklch(0.14 0.04 265 / 0.8)",
-                border: "1px solid oklch(0.28 0.06 265 / 0.7)",
-              }}
-            >
-              {addressError === "fallback" && canisterPrincipal ? (
-                <>
-                  <p
-                    className="text-xs mb-1.5 font-medium"
-                    style={{ color: "oklch(0.65 0.1 80)" }}
-                  >
-                    ⚠ Canister Principal ID (account derivation unavailable)
-                  </p>
-                  <div className="flex items-start gap-2">
-                    <code
-                      className="flex-1 text-xs break-all font-mono leading-relaxed"
-                      style={{ color: "oklch(0.75 0.14 220)" }}
-                    >
-                      {canisterPrincipal}
-                    </code>
-                    <button
-                      type="button"
-                      data-ocid="admin.deposit_address_copy_button"
-                      onClick={handleCopyAddress}
-                      className="flex-shrink-0 p-1.5 rounded-lg transition-colors hover:opacity-80"
-                      style={{
-                        background: "oklch(0.55 0.18 230 / 0.15)",
-                        border: "1px solid oklch(0.55 0.18 230 / 0.3)",
-                        color: "oklch(0.72 0.14 225)",
-                      }}
-                      title="Copy address"
-                    >
-                      {addressCopied ? (
-                        <CheckCircle2
-                          className="w-3.5 h-3.5"
-                          style={{ color: "oklch(0.72 0.18 145)" }}
-                        />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </>
-              ) : depositAddress ? (
-                <>
-                  <p
-                    className="text-xs mb-1.5 font-medium"
-                    style={{ color: "oklch(0.62 0.04 255)" }}
-                  >
-                    ICP Account Identifier
-                  </p>
-                  <div className="flex items-start gap-2">
-                    <code
-                      className="flex-1 text-xs break-all font-mono leading-relaxed"
-                      style={{ color: "oklch(0.75 0.14 220)" }}
-                    >
-                      {depositAddress}
-                    </code>
-                    <button
-                      type="button"
-                      data-ocid="admin.deposit_address_copy_button"
-                      onClick={handleCopyAddress}
-                      className="flex-shrink-0 p-1.5 rounded-lg transition-colors hover:opacity-80"
-                      style={{
-                        background: "oklch(0.55 0.18 230 / 0.15)",
-                        border: "1px solid oklch(0.55 0.18 230 / 0.3)",
-                        color: "oklch(0.72 0.14 225)",
-                      }}
-                      title="Copy address"
-                    >
-                      {addressCopied ? (
-                        <CheckCircle2
-                          className="w-3.5 h-3.5"
-                          style={{ color: "oklch(0.72 0.18 145)" }}
-                        />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-3 w-full rounded-full animate-pulse"
-                    style={{ background: "oklch(0.25 0.05 265 / 0.6)" }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Quick ref */}
-            <div
-              className="rounded-lg p-2.5 text-xs"
-              style={{
-                background: "oklch(0.55 0.18 230 / 0.08)",
-                border: "1px solid oklch(0.55 0.18 230 / 0.2)",
-                color: "oklch(0.62 0.08 230)",
-              }}
-            >
-              💡 Approximate rate: <strong>1 ICP ≈ 13T cycles</strong> at
-              current SDR prices. Rates fluctuate with ICP market price.
+                Use CycleOps (recommended)
+              </p>
+              <p className="text-xs leading-relaxed">
+                CycleOps can monitor and automatically top up canisters you
+                don't directly control. Visit{" "}
+                <a
+                  href="https://cycleops.dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+                  style={{ color: "oklch(0.72 0.14 225)" }}
+                  data-ocid="admin.cycleops_link"
+                >
+                  cycleops.dev
+                </a>{" "}
+                and add your canister ID to set up automated top-ups.
+              </p>
             </div>
           </div>
 
-          {/* Divider (vertical on md+) */}
-          <div
-            className="hidden md:block w-px self-stretch"
-            style={{ background: "oklch(0.28 0.05 265 / 0.5)" }}
-          />
-          <div
-            className="block md:hidden h-px w-full"
-            style={{ background: "oklch(0.28 0.05 265 / 0.5)" }}
-          />
-
-          {/* Convert to Cycles */}
-          <div className="md:w-64 flex flex-col">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap
-                className="w-4 h-4"
-                style={{ color: "oklch(0.72 0.16 230)" }}
-              />
-              <h3
-                className="font-display text-sm font-semibold"
-                style={{ color: "oklch(0.75 0.14 225)" }}
-              >
-                Convert to Cycles
-              </h3>
-            </div>
-
-            <p
-              className="text-xs mb-4"
-              style={{ color: "oklch(0.60 0.04 255)" }}
+          <div className="flex gap-3">
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold"
+              style={{
+                background: "oklch(0.55 0.22 230 / 0.2)",
+                border: "1px solid oklch(0.67 0.18 230 / 0.4)",
+                color: "oklch(0.75 0.16 225)",
+              }}
             >
-              After sending ICP to the deposit address, enter the amount and
-              proceed.
-            </p>
-
-            <div className="space-y-3 flex-1">
-              <Label
-                htmlFor="icp-amount"
-                className="text-xs font-medium"
-                style={{ color: "oklch(0.68 0.04 255)" }}
-              >
-                ICP amount to convert
-              </Label>
-              <Input
-                id="icp-amount"
-                data-ocid="admin.icp_amount_input"
-                type="number"
-                min="0.01"
-                step="0.1"
-                value={icpAmount}
-                onChange={(e) => setIcpAmount(e.target.value)}
-                className="h-9 text-sm bg-transparent border-border/60 focus:border-primary/60 rounded-xl"
-                placeholder="1"
-              />
-
-              {/* Estimated cycles */}
-              {icpAmount && !Number.isNaN(Number.parseFloat(icpAmount)) && (
-                <p
-                  className="text-xs"
-                  style={{ color: "oklch(0.62 0.08 230)" }}
-                >
-                  ≈{" "}
-                  {formatCycleBalance(
-                    BigInt(
-                      Math.round(
-                        Number.parseFloat(icpAmount) * 13_000_000_000_000,
-                      ),
-                    ),
-                  )}{" "}
-                  estimated
-                </p>
-              )}
+              2
             </div>
-
-            <Dialog
-              open={convertDialogOpen}
-              onOpenChange={setConvertDialogOpen}
-            >
-              <DialogTrigger asChild>
-                <Button
-                  data-ocid="admin.convert_cycles_button"
-                  className="mt-4 w-full gap-2 font-semibold rounded-xl border-0 bg-gradient-sky text-white hover:opacity-90 transition-opacity glow-sky"
-                  disabled={
-                    !icpAmount ||
-                    Number.isNaN(Number.parseFloat(icpAmount)) ||
-                    Number.parseFloat(icpAmount) <= 0
-                  }
-                >
-                  <Zap className="w-4 h-4" />
-                  Convert to Cycles
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent
-                data-ocid="admin.convert_cycles_dialog"
-                className="max-w-lg rounded-2xl"
-                style={{
-                  background:
-                    "linear-gradient(135deg, oklch(0.18 0.06 265 / 0.98), oklch(0.15 0.05 285 / 0.99))",
-                  border: "1px solid oklch(0.55 0.18 230 / 0.35)",
-                  boxShadow: "0 0 80px oklch(0.55 0.2 250 / 0.2)",
-                }}
+            <div>
+              <p
+                className="font-semibold mb-0.5"
+                style={{ color: "oklch(0.82 0.08 255)" }}
               >
-                <DialogHeader>
-                  <DialogTitle className="font-display text-lg font-bold text-gradient-sky">
-                    Convert ICP to Cycles
-                  </DialogTitle>
-                  <DialogDescription
-                    className="text-sm leading-relaxed"
-                    style={{ color: "oklch(0.65 0.04 255)" }}
-                  >
-                    Automated ICP → cycles conversion is coming soon. For now,
-                    follow these steps to top up manually.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4 py-2">
-                  {/* Steps */}
-                  {[
-                    {
-                      step: "1",
-                      title: "Send ICP to deposit address",
-                      desc: `Send ${icpAmount} ICP from your wallet to the deposit address shown on the admin dashboard.`,
-                    },
-                    {
-                      step: "2",
-                      title: "Open the NNS App",
-                      desc: "Navigate to the NNS App and go to your canisters section.",
-                    },
-                    {
-                      step: "3",
-                      title: "Top up your canister",
-                      desc: "Find your main canister by its ID and use the 'Add Cycles' option to convert the ICP you sent.",
-                    },
-                    {
-                      step: "4",
-                      title: "Refresh your balance",
-                      desc: "Return to this dashboard and click the refresh button on the Cycle Balance card to confirm the top-up.",
-                    },
-                  ].map(({ step, title, desc }) => (
-                    <div key={step} className="flex gap-3">
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-bold"
-                        style={{
-                          background: "oklch(0.55 0.22 230 / 0.2)",
-                          border: "1px solid oklch(0.67 0.18 230 / 0.4)",
-                          color: "oklch(0.75 0.16 225)",
-                        }}
-                      >
-                        {step}
-                      </div>
-                      <div>
-                        <p
-                          className="text-sm font-semibold mb-0.5"
-                          style={{ color: "oklch(0.82 0.08 255)" }}
-                        >
-                          {title}
-                        </p>
-                        <p
-                          className="text-xs leading-relaxed"
-                          style={{ color: "oklch(0.65 0.04 255)" }}
-                        >
-                          {desc}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <DialogFooter className="gap-2 sm:gap-2">
-                  <Button
-                    variant="ghost"
-                    data-ocid="admin.convert_dialog_close_button"
-                    onClick={() => setConvertDialogOpen(false)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    Close
-                  </Button>
-                  <a
-                    href="https://nns.ic0.app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button
-                      data-ocid="admin.nns_link_button"
-                      className="gap-2 font-semibold rounded-xl border-0 bg-gradient-sky text-white hover:opacity-90 transition-opacity"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Open NNS App
-                    </Button>
-                  </a>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                Contact Caffeine Support
+              </p>
+              <p className="text-xs leading-relaxed">
+                Caffeine may be able to add you as a co-controller or handle
+                cycle top-ups on your behalf. Reach out via the feedback button
+                in your Caffeine account for assistance.
+              </p>
+            </div>
           </div>
+        </div>
+
+        <div
+          className="mt-4 pt-4 text-xs"
+          style={{
+            borderTop: "1px solid oklch(0.28 0.05 265 / 0.5)",
+            color: "oklch(0.55 0.04 255)",
+          }}
+        >
+          Your canister ID is shown in the Cycle Balance card above. Copy it to
+          use with CycleOps or when contacting support.
         </div>
       </motion.div>
     </motion.div>
