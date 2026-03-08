@@ -66,6 +66,7 @@ export interface backendInterface {
     createMedia(title: string, blobId: string, mediaType: MediaType): Promise<string>;
     createNeuronEntry(neuronId: string, dissolveDate: string, designatedController: string, votingPreferences: string, notes: string): Promise<string>;
     createNote(title: string, body: string): Promise<string>;
+    deleteCapsule(): Promise<void>;
     deleteMedia(mediaId: string): Promise<void>;
     deleteNeuronEntry(entryId: string): Promise<void>;
     deleteNote(noteId: string): Promise<void>;

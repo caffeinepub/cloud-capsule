@@ -92,6 +92,7 @@ export interface _SERVICE {
     string
   >,
   'createNote' : ActorMethod<[string, string], string>,
+  'deleteCapsule' : ActorMethod<[], undefined>,
   'deleteMedia' : ActorMethod<[string], undefined>,
   'deleteNeuronEntry' : ActorMethod<[string], undefined>,
   'deleteNote' : ActorMethod<[string], undefined>,

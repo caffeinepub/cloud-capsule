@@ -208,6 +208,20 @@ actor {
     capsules.add(caller, newCapsule);
   };
 
+  public shared ({ caller }) func deleteCapsule() : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only authenticated users can delete capsules");
+    };
+
+    switch (capsules.get(caller)) {
+      case (null) { Runtime.trap("Capsule not found") };
+      case (?_capsule) {
+        capsules.remove(caller);
+        userProfiles.remove(caller);
+      };
+    };
+  };
+
   public shared ({ caller }) func toggleCapsuleLock() : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only authenticated users can toggle capsule lock");
@@ -626,3 +640,4 @@ actor {
     Runtime.trap("Unauthorized: Access denied");
   };
 };
+

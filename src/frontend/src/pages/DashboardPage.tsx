@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import AccessTab from "../components/dashboard/AccessTab";
 import BeneficiariesTab from "../components/dashboard/BeneficiariesTab";
 import MediaTab from "../components/dashboard/MediaTab";
@@ -27,6 +28,7 @@ import SettingsTab from "../components/dashboard/SettingsTab";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
   useCreateCapsule,
+  useDeleteCapsule,
   useGetCallerUserProfile,
   useGetCapsuleLockStatus,
   useSaveCallerUserProfile,
@@ -53,6 +55,7 @@ export default function DashboardPage() {
     useGetCapsuleLockStatus(ownerPrincipal);
   const saveProfile = useSaveCallerUserProfile();
   const createCapsule = useCreateCapsule();
+  const deleteCapsule = useDeleteCapsule();
   const toggleLock = useToggleCapsuleLock();
 
   // Redirect if not authenticated
@@ -114,6 +117,14 @@ export default function DashboardPage() {
   };
 
   const handleLogout = async () => {
+    await clear();
+    queryClient.clear();
+    navigate({ to: "/" });
+  };
+
+  const handleDeleteCapsule = async () => {
+    await deleteCapsule.mutateAsync();
+    toast.success("Your capsule has been deleted");
     await clear();
     queryClient.clear();
     navigate({ to: "/" });
@@ -333,6 +344,7 @@ export default function DashboardPage() {
               onSaveProfile={async (profile) => {
                 await saveProfile.mutateAsync(profile);
               }}
+              onDeleteCapsule={handleDeleteCapsule}
             />
           </TabsContent>
 

@@ -467,3 +467,21 @@ export function useRemoveBeneficiary() {
     },
   });
 }
+
+// ── Delete Capsule ────────────────────────────────────────────────────────
+
+export function useDeleteCapsule() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.deleteCapsule();
+    },
+    onSuccess: () => {
+      // Invalidate all queries so nothing stale lingers after deletion
+      queryClient.clear();
+    },
+  });
+}
