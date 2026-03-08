@@ -225,23 +225,25 @@ export default function SettingsTab({
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3">
-          {canisterId && (
-            <a
-              href={`https://dashboard.internetcomputer.org/canister/${canisterId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 flex-1"
-              style={{
-                background:
-                  "linear-gradient(135deg, oklch(0.67 0.18 230), oklch(0.58 0.22 285))",
-                color: "white",
-              }}
-              data-ocid="settings.link"
-            >
-              <BarChart3 className="w-4 h-4" />
-              View Cycle Balance on IC Dashboard
-            </a>
-          )}
+          <a
+            href={
+              canisterId
+                ? `https://dashboard.internetcomputer.org/canister/${canisterId}`
+                : "https://dashboard.internetcomputer.org"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 flex-1"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.67 0.18 230), oklch(0.58 0.22 285))",
+              color: "white",
+            }}
+            data-ocid="settings.link"
+          >
+            <BarChart3 className="w-4 h-4" />
+            View Cycle Balance on IC Dashboard
+          </a>
         </div>
       </div>
 
@@ -421,21 +423,23 @@ export default function SettingsTab({
                   <ExternalLink className="w-4 h-4" />
                   Open NNS App
                 </a>
-                {canisterId && (
-                  <a
-                    href={`https://dashboard.internetcomputer.org/canister/${canisterId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 w-full h-10 rounded-lg text-sm font-medium transition-opacity hover:opacity-80 border"
-                    style={{
-                      borderColor: "oklch(0.67 0.18 230 / 0.4)",
-                      color: "oklch(0.72 0.18 225)",
-                    }}
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    Check Cycle Balance on IC Dashboard
-                  </a>
-                )}
+                <a
+                  href={
+                    canisterId
+                      ? `https://dashboard.internetcomputer.org/canister/${canisterId}`
+                      : "https://dashboard.internetcomputer.org"
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full h-10 rounded-lg text-sm font-medium transition-opacity hover:opacity-80 border"
+                  style={{
+                    borderColor: "oklch(0.67 0.18 230 / 0.4)",
+                    color: "oklch(0.72 0.18 225)",
+                  }}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Check Cycle Balance on IC Dashboard
+                </a>
               </div>
             </div>
           </DialogContent>
