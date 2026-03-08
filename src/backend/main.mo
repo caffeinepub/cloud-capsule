@@ -586,8 +586,8 @@ actor {
     beneficiarySessions.remove(token);
   };
 
-  // Cycle Balance Queries (admin or owner only)
-  public query ({ caller }) func getCycleBalance() : async Nat {
+  // Cycle Balance Queries (admin only)
+  public shared ({ caller }) func getCycleBalance() : async Nat {
     Runtime.trap("NotImplemented: cyclesBalance");
   };
 

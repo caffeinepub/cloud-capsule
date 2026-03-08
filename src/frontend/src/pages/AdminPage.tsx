@@ -486,28 +486,36 @@ function CycleManagement({ actor, actorFetching }: CycleManagementProps) {
           ) : cycleError ? (
             <div data-ocid="admin.cycle_error_state">
               <p
-                className="font-display text-2xl font-bold mb-1"
+                className="font-display text-2xl font-bold mb-2"
                 style={{ color: "oklch(0.68 0.04 255)" }}
               >
-                Balance unavailable
+                Check IC Dashboard
               </p>
               <p
-                className="text-xs leading-relaxed"
+                className="text-xs leading-relaxed mb-3"
                 style={{ color: "oklch(0.55 0.04 255)" }}
               >
-                The cycle balance endpoint is still being configured in the
-                backend. You can manually check your balance via the{" "}
-                <a
-                  href="https://dashboard.internetcomputer.org"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline underline-offset-2"
-                  style={{ color: "oklch(0.67 0.14 230)" }}
-                >
-                  IC Dashboard
-                </a>
-                .
+                Your live cycle balance is always visible on the IC Dashboard.
+                Copy your canister ID from below and paste it in the search bar.
               </p>
+              <a
+                href={
+                  canisterPrincipal
+                    ? `https://dashboard.internetcomputer.org/canister/${canisterPrincipal}`
+                    : "https://dashboard.internetcomputer.org"
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-opacity hover:opacity-80"
+                style={{
+                  background: "oklch(0.55 0.18 230 / 0.15)",
+                  border: "1px solid oklch(0.55 0.18 230 / 0.3)",
+                  color: "oklch(0.72 0.14 225)",
+                }}
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open IC Dashboard
+              </a>
             </div>
           ) : (
             <div>

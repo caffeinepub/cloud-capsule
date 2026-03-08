@@ -125,7 +125,7 @@ export const idlService = IDL.Service({
   'getCapsuleLockStatus' : IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
   'getCapsuleMedia' : IDL.Func([IDL.Principal], [IDL.Vec(Media)], ['query']),
   'getCapsuleNotes' : IDL.Func([IDL.Principal], [IDL.Vec(Note)], ['query']),
-  'getCycleBalance' : IDL.Func([], [IDL.Nat], ['query']),
+  'getCycleBalance' : IDL.Func([], [IDL.Nat], []),
   'getGlobalInstructions' : IDL.Func([IDL.Principal], [IDL.Text], ['query']),
   'getNeuronEntries' : IDL.Func(
       [IDL.Principal],
@@ -280,7 +280,7 @@ export const idlFactory = ({ IDL }) => {
     'getCapsuleLockStatus' : IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
     'getCapsuleMedia' : IDL.Func([IDL.Principal], [IDL.Vec(Media)], ['query']),
     'getCapsuleNotes' : IDL.Func([IDL.Principal], [IDL.Vec(Note)], ['query']),
-    'getCycleBalance' : IDL.Func([], [IDL.Nat], ['query']),
+    'getCycleBalance' : IDL.Func([], [IDL.Nat], []),
     'getGlobalInstructions' : IDL.Func([IDL.Principal], [IDL.Text], ['query']),
     'getNeuronEntries' : IDL.Func(
         [IDL.Principal],
